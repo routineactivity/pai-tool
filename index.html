@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PAI Diagnostic Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      max-width: 900px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #summary {
+      font-size: 18px;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    canvas {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Predictive Accuracy Index (PAI) Diagnostic</h1>
+
+<p>
+Upload a CSV containing spatial units, their area, and observed crime counts.
+PAI is computed per unit and plotted after ranking by crime count.
+</p>
+
+<input type="file" id="csvFile" accept=".csv" />
+
+<div id="summary"></div>
+
+<canvas id="paiChart" width="800" height="400"></canvas>
+
+<script>
+document.getElementById("csvFile").addEventListener("change", handleFile);
+
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    processCSV(e.target.result);
+  };
+  reader.readAsText(file);
+}
+
+function processCSV(csv) {
+  const rows = csv.trim().split("\n").map(r => r.split(","));
+  const header = rows.shift();
+
+  const unitIdx = header.indexOf("unit_id");
+  const areaIdx = header.indexOf("area");
+  const crimeIdx = header.indexOf("crime_count");
+
+  if (unitIdx === -1 || areaIdx === -1 || crimeIdx === -1) {
+    alert("CSV must contain columns: unit_id, area, crime_count");
+    return;
+  }
+
+  const data = rows.map(r => ({
+    unit: r[unitIdx],
+    area: parseFloat(r[areaIdx]),
+    crimes: parseFloat(r[crimeIdx])
+  }));
+
+  const totalCrimes = data.reduce((s, d) => s + d.crimes, 0);
+  const totalArea = data.reduce((s, d) => s + d.area, 0);
+
+  data.forEach(d => {
+    d.pai = (d.crimes / totalCrimes) / (d.area / totalArea);
+  });
+
+  data.sort((a, b) => b.crimes - a.crimes);
+
+  const paiValues = data.map(d => d.pai);
+  const above10 = paiValues.filter(v => v > 10).length;
+
+  document.getElementById("summary").innerText =
+    `${above10} spatial units have a PAI greater than 10`;
+
+  drawChart(paiValues);
+}
+
+let chart;
+
+function drawChart(paiValues) {
+  const ctx = document.getElementById("paiChart").getContext("2d");
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: paiValues.map((_, i) => i + 1),
+      datasets: [
+        {
+          label: "PAI (ranked by crime count)",
+          data: paiValues,
+          borderColor: "steelblue",
+          borderWidth: 2,
+          pointRadius: 0
+        },
+        {
+          label: "PAI = 10",
+          data: paiValues.map(() => 10),
+          borderColor: "red",
+          borderDash: [5, 5],
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: true }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: "Spatial units (ranked)" }
+        },
+        y: {
+          title: { display: true, text: "Predictive Accuracy Index" },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+</script>
+
+</body>
+</html>
