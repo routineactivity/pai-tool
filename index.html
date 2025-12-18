@@ -1,140 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PAI Diagnostic Tool</title>
+
+  <!-- Chart -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Robust CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 40px;
-      max-width: 900px;
-    }
-    h1 {
-      margin-bottom: 10px;
-    }
-    #summary {
-      font-size: 18px;
-      margin: 20px 0;
-      font-weight: bold;
-    }
-    canvas {
-      margin-top: 30px;
-    }
+    body { font-family: Arial, sans-serif; margin: 40px; max-width: 980px; }
+    h1 { margin-bottom: 8px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    #status { margin-top: 10px; padding: 10px; border-radius: 6px; }
+    .ok { background: #eef7ee; }
+    .err { background: #fdeeee; }
+    #summary { font-size: 18px; margin: 18px 0; font-weight: bold; }
+    canvas { margin-top: 20px; }
+    button { padding: 8px 14px; cursor: pointer; }
+    code { background: #f4f4f4; padding: 1px 4px; border-radius: 4px; }
   </style>
 </head>
+
 <body>
+  <h1>Predictive Accuracy Index (PAI) Diagnostic</h1>
+  <p>
+    Upload a CSV with columns <code>unit_id</code>, <code>area</code>, <code>crime_count</code>.
+    PAI per unit = (crime share) ÷ (area share).
+  </p>
 
-<h1>Predictive Accuracy Index (PAI) Diagnostic</h1>
+  <div class="row">
+    <input type="file" id="csvFile" accept=".csv" />
+    <button id="runBtn" disabled>Run</button>
+  </div>
 
-<p>
-Upload a CSV containing spatial units, their area, and observed crime counts.
-PAI is computed per unit and plotted after ranking by crime count.
-</p>
-
-<input type="file" id="csvFile" accept=".csv" />
-
-<div id="summary"></div>
-
-<canvas id="paiChart" width="800" height="400"></canvas>
+  <div id="status"></div>
+  <div id="summary"></div>
+  <canvas id="paiChart" width="900" height="420"></canvas>
 
 <script>
-document.getElementById("csvFile").addEventListener("change", handleFile);
+  const fileInput = document.getElementById("csvFile");
+  const runBtn = document.getElementById("runBtn");
+  const statusEl = document.getElementById("status");
+  const summaryEl = document.getElementById("summary");
 
-function handleFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  let selectedFile = null;
+  let chart = null;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    processCSV(e.target.result);
-  };
-  reader.readAsText(file);
-}
-
-function processCSV(csv) {
-  const rows = csv.trim().split("\n").map(r => r.split(","));
-  const header = rows.shift();
-
-  const unitIdx = header.indexOf("unit_id");
-  const areaIdx = header.indexOf("area");
-  const crimeIdx = header.indexOf("crime_count");
-
-  if (unitIdx === -1 || areaIdx === -1 || crimeIdx === -1) {
-    alert("CSV must contain columns: unit_id, area, crime_count");
-    return;
+  function setStatus(msg, ok=true) {
+    statusEl.textContent = msg;
+    statusEl.className = ok ? "ok" : "err";
   }
 
-  const data = rows.map(r => ({
-    unit: r[unitIdx],
-    area: parseFloat(r[areaIdx]),
-    crimes: parseFloat(r[crimeIdx])
-  }));
+  // normalise headers: trim, lowercase, remove BOM
+  function normHeader(h) {
+    return (h || "")
+      .replace(/^\uFEFF/, "")     // strip BOM
+      .trim()
+      .toLowerCase();
+  }
 
-  const totalCrimes = data.reduce((s, d) => s + d.crimes, 0);
-  const totalArea = data.reduce((s, d) => s + d.area, 0);
+  // accept a few common header variants (optional but helpful)
+  function findCol(headers, candidates) {
+    for (const c of candidates) {
+      const idx = headers.indexOf(c);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  }
 
-  data.forEach(d => {
-    d.pai = (d.crimes / totalCrimes) / (d.area / totalArea);
+  fileInput.addEventListener("change", (e) => {
+    selectedFile = e.target.files[0] || null;
+    runBtn.disabled = !selectedFile;
+    summaryEl.textContent = "";
+    if (chart) { chart.destroy(); chart = null; }
+    if (selectedFile) setStatus(`Selected: ${selectedFile.name}. Click Run.`, true);
+    else setStatus("", true);
   });
 
-  data.sort((a, b) => b.crimes - a.crimes);
+  runBtn.addEventListener("click", () => {
+    if (!selectedFile) return;
 
-  const paiValues = data.map(d => d.pai);
-  const above10 = paiValues.filter(v => v > 10).length;
+    setStatus("Parsing CSV…", true);
 
-  document.getElementById("summary").innerText =
-    `${above10} spatial units have a PAI greater than 10`;
-
-  drawChart(paiValues);
-}
-
-let chart;
-
-function drawChart(paiValues) {
-  const ctx = document.getElementById("paiChart").getContext("2d");
-
-  if (chart) chart.destroy();
-
-  chart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: paiValues.map((_, i) => i + 1),
-      datasets: [
-        {
-          label: "PAI (ranked by crime count)",
-          data: paiValues,
-          borderColor: "steelblue",
-          borderWidth: 2,
-          pointRadius: 0
-        },
-        {
-          label: "PAI = 10",
-          data: paiValues.map(() => 10),
-          borderColor: "red",
-          borderDash: [5, 5],
-          pointRadius: 0
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: true }
-      },
-      scales: {
-        x: {
-          title: { display: true, text: "Spatial units (ranked)" }
-        },
-        y: {
-          title: { display: true, text: "Predictive Accuracy Index" },
-          beginAtZero: true
+    Papa.parse(selectedFile, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: true,
+      complete: (results) => {
+        try {
+          if (results.errors && results.errors.length) {
+            // show the first parse error
+            throw new Error(results.errors[0].message);
+          }
+          processData(results.data, results.meta.fields || []);
+        } catch (err) {
+          setStatus(`Error: ${err.message}`, false);
         }
       }
-    }
+    });
   });
-}
+
+  function processData(rows, fields) {
+    if (!rows || !rows.length) throw new Error("No data rows found.");
+
+    const headers = fields.map(normHeader);
+
+    const unitIdx  = findCol(headers, ["unit_id", "unit", "id", "hex_id", "ward_id"]);
+    const areaIdx  = findCol(headers, ["area", "area_m2", "area_ha", "area_sqmi", "area_km2"]);
+    const crimeIdx = findCol(headers, ["crime_count", "crimes", "count", "n_crimes"]);
+
+    if (unitIdx === -1 || areaIdx === -1 || crimeIdx === -1) {
+      throw new Error(
+        `Missing required columns. Found headers: ${headers.join(", ")}. ` +
+        `Need: unit_id, area, crime_count (or accepted variants).`
+      );
+    }
+
+    // Convert rows into clean objects
+    const data = rows.map(r => {
+      const raw = Object.values(r);
+      return {
+        unit: String(raw[unitIdx]),
+        area: Number(raw[areaIdx]),
+        crimes: Number(raw[crimeIdx])
+      };
+    }).filter(d => d.unit && Number.isFinite(d.area) && Number.isFinite(d.crimes));
+
+    if (!data.length) throw new Error("No valid rows after reading unit/area/crime_count.");
+
+    const totalCrimes = data.reduce((s, d) => s + d.crimes, 0);
+    const totalArea   = data.reduce((s, d) => s + d.area, 0);
+
+    if (!(totalCrimes > 0)) throw new Error("Total crime_count is 0 (or invalid).");
+    if (!(totalArea > 0)) throw new Error("Total area is 0 (or invalid).");
+    if (data.some(d => d.area <= 0)) throw new Error("Some rows have area <= 0.");
+
+    data.forEach(d => {
+      d.pai = (d.crimes / totalCrimes) / (d.area / totalArea);
+    });
+
+    // Sort by crimes descending (ties arbitrary)
+    data.sort((a, b) => b.crimes - a.crimes);
+
+    const paiValues = data.map(d => d.pai);
+    const above10 = paiValues.filter(v => v > 10).length;
+
+    summaryEl.textContent = `${above10} spatial units have a PAI greater than 10`;
+    setStatus(`OK. Rows: ${data.length}. Total crimes: ${totalCrimes}.`, true);
+
+    drawChart(paiValues);
+  }
+
+  function drawChart(paiValues) {
+    const ctx = document.getElementById("paiChart").getContext("2d");
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: paiValues.map((_, i) => i + 1),
+        datasets: [
+          {
+            label: "PAI (ranked by crime count)",
+            data: paiValues,
+            borderWidth: 2,
+            pointRadius: 0
+          },
+          {
+            label: "PAI = 10",
+            data: paiValues.map(() => 10),
+            borderWidth: 2,
+            borderDash: [6, 6],
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true } },
+        scales: {
+          x: { title: { display: true, text: "Spatial units (ranked)" } },
+          y: { title: { display: true, text: "Predictive Accuracy Index (PAI)" }, beginAtZero: true }
+        }
+      }
+    });
+  }
 </script>
+</body>
+</html>
 
 </body>
 </html>
