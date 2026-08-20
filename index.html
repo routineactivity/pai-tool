@@ -94,10 +94,23 @@
       transition: border-color 0.15s ease, transform 0.15s ease;
     }
 
-    .mode-card:hover { transform: translateY(-1px); border-color: #9fb7cc; }
-    .mode-card.active { border-color: var(--accent); }
-    .mode-card strong { display: block; font-size: 1.15rem; margin-bottom: 5px; }
-    .mode-card span { color: var(--muted); }
+    .mode-card { color: #17324d; }
+    .mode-card:hover {
+      transform: translateY(-1px);
+      border-color: #8fb7d8;
+      background: #eaf4fc;
+    }
+    .mode-card.active {
+      border-color: var(--accent);
+      background: #dceaf7;
+    }
+    .mode-card strong {
+      display: block;
+      font-size: 1.15rem;
+      margin-bottom: 5px;
+      color: #17324d;
+    }
+    .mode-card span { color: #465c6d; }
 
     .panel {
       background: var(--surface);
