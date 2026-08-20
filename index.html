@@ -78,7 +78,7 @@
 
     .mode-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 16px;
       margin: 12px 0 28px;
     }
@@ -250,6 +250,53 @@
     .formula { font-family: Georgia, serif; font-size: 1.05rem; }
     .spacer { height: 4px; }
 
+    .submode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0 22px;
+    }
+
+    .submode-card {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: #17324d;
+      border-radius: 8px;
+      padding: 15px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .submode-card:hover { border-color: #8fb7d8; background: #eaf4fc; }
+    .submode-card.active { border-color: var(--accent); background: #dceaf7; }
+    .submode-card strong { display:block; margin-bottom:4px; font-size:1rem; }
+    .submode-card span { color:#465c6d; font-size:0.88rem; }
+
+    .eval-counts {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 15px;
+      margin: 15px 0;
+      background: #fbfcfd;
+    }
+
+    .warning-callout {
+      border-left: 4px solid #c58a1a;
+      padding: 12px 14px;
+      background: var(--warn-bg);
+      color: var(--warn-text);
+      margin: 15px 0;
+    }
+
+    .positive-callout {
+      border-left: 4px solid #4b8758;
+      padding: 12px 14px;
+      background: var(--good-bg);
+      color: var(--good-text);
+      margin: 15px 0;
+    }
+
+
     details {
       border-top: 1px solid var(--border);
       padding-top: 12px;
@@ -264,7 +311,7 @@
 
     @media (max-width: 650px) {
       .page { padding: 22px 14px 40px; }
-      .mode-grid, .grid-2, .grid-4, .summary-grid { grid-template-columns: 1fr; }
+      .mode-grid, .submode-grid, .grid-2, .grid-4, .summary-grid { grid-template-columns: 1fr; }
       .panel { padding: 16px; }
     }
   </style>
@@ -273,8 +320,8 @@
   <main class="page">
     <h1>Place-Based Crime Analysis Tool</h1>
     <p class="lede">
-      Prioritise high-crime places or test how well an earlier period identifies crime in a future period.
-      The tool reports crime capture, PAI, PPAI and, for temporal evaluation, the Recapture Rate Index (RRI).
+      Prioritise high-crime places, test whether earlier hotspots predict future crime, or evaluate a place-based intervention.
+      The tool reports crime capture, PAI, PPAI, RRI, controlled before and after effects and Weighted Displacement Difference (WDD).
     </p>
     <div class="privacy-note">CSV data are processed in your browser and are not uploaded to a server by this page.</div>
 
@@ -286,6 +333,10 @@
       <button class="mode-card" id="modePrediction" type="button">
         <strong>2. Test a prediction</strong>
         <span>Use crime in T1 to select priority places, then measure how much crime those places capture in T2.</span>
+      </button>
+      <button class="mode-card" id="modeEvaluation" type="button">
+        <strong>3. Evaluate an intervention</strong>
+        <span>Compare before and after change with a control area, or assess displacement and diffusion using WDD.</span>
       </button>
     </section>
 
@@ -346,6 +397,147 @@
       </div>
 
       <div id="status" class="status" role="status"></div>
+    </section>
+
+
+    <section class="panel hidden" id="evaluationPanel">
+      <h2>Evaluate an intervention</h2>
+      <p>Use simple before and after crime counts to estimate change relative to a comparison area, or test whether a place-based response was accompanied by displacement or diffusion of benefits.</p>
+
+      <div class="submode-grid" aria-label="Evaluation method">
+        <button class="submode-card active" id="evalBeforeAfterTab" type="button">
+          <strong>A. Controlled before and after</strong>
+          <span>Compare change in an intervention area with a selected control, or use the wider study area as a weaker non-equivalent comparison.</span>
+        </button>
+        <button class="submode-card" id="evalWddTab" type="button">
+          <strong>B. Displacement and diffusion (WDD)</strong>
+          <span>Combine treatment, control and displacement-zone changes using the Weighted Displacement Difference statistic.</span>
+        </button>
+      </div>
+
+      <div id="evalBeforeAfterInputs">
+        <div class="grid-3">
+          <div>
+            <label for="evalCsvFile">Upload evaluation CSV</label>
+            <input type="file" id="evalCsvFile" accept=".csv,text/csv" />
+            <div class="field-help">Required rows: intervention + control, or intervention + study_area_total.</div>
+          </div>
+          <div>
+            <label for="evalSampleDataset">Built-in sample dataset</label>
+            <select id="evalSampleDataset"></select>
+            <button class="secondary" id="evalLoadSampleBtn" type="button" style="width:100%;margin-top:8px;">Load sample</button>
+            <div class="field-help">Loads counts into the fields below; you can then edit them.</div>
+          </div>
+          <div>
+            <label>CSV template</label>
+            <button class="secondary" id="evalTemplateBtn" type="button" style="width:100%;">Download template CSV</button>
+            <div class="field-help">Templates use <code>area_type,before,after</code>.</div>
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid var(--border);margin:20px 0;" />
+
+        <div class="grid-2">
+          <div>
+            <label for="controlBasis">Comparison type</label>
+            <select id="controlBasis">
+              <option value="matched">Selected control / comparison area (recommended)</option>
+              <option value="study">Whole study area total, including intervention</option>
+            </select>
+            <div class="field-help" id="controlBasisHelp">Use an untreated area that is broadly comparable with the intervention area.</div>
+          </div>
+          <div class="small" style="align-self:end;">
+            The before and after periods should be the same duration. A simple two-period comparison does not test the parallel-trends assumption.
+          </div>
+        </div>
+
+        <div class="eval-counts">
+          <h3 style="margin-top:0;">Crime counts</h3>
+          <div class="grid-4">
+            <div>
+              <label for="treatBefore">Intervention before</label>
+              <input id="treatBefore" type="number" min="0" step="1" value="120" />
+            </div>
+            <div>
+              <label for="treatAfter">Intervention after</label>
+              <input id="treatAfter" type="number" min="0" step="1" value="85" />
+            </div>
+            <div>
+              <label for="controlBefore" id="controlBeforeLabel">Control before</label>
+              <input id="controlBefore" type="number" min="0" step="1" value="118" />
+            </div>
+            <div>
+              <label for="controlAfter" id="controlAfterLabel">Control after</label>
+              <input id="controlAfter" type="number" min="0" step="1" value="108" />
+            </div>
+          </div>
+        </div>
+
+        <div id="studyControlWarning" class="warning-callout hidden">
+          <strong>Non-equivalent comparison.</strong> The tool will subtract the intervention-area counts from the whole-study-area totals and use the remainder as the comparison. This adjusts for the general study-area trend, but the wider area may differ substantially from the intervention area and does not establish the counterfactual.
+        </div>
+
+        <div class="warning-callout">
+          <strong>Important interpretation note.</strong> This is a simple two-period Difference-in-Differences-style comparison. A more credible causal interpretation requires a comparison area that would plausibly have followed the same trend as the intervention area without the intervention. With only one before and one after period, the tool cannot test that parallel-trends assumption. Results may also reflect regression to the mean, wider policy changes, seasonality, reporting changes or other contemporaneous events.
+        </div>
+
+        <div class="row">
+          <button id="runBeforeAfterBtn" type="button">Run controlled before and after</button>
+        </div>
+      </div>
+
+      <div id="evalWddInputs" class="hidden">
+        <div class="grid-3">
+          <div>
+            <label for="wddCsvFile">Upload WDD CSV</label>
+            <input type="file" id="wddCsvFile" accept=".csv,text/csv" />
+            <div class="field-help">Four rows: intervention, control, displacement and control_displacement.</div>
+          </div>
+          <div>
+            <label for="wddSampleDataset">Built-in sample dataset</label>
+            <select id="wddSampleDataset">
+              <option value="evaluation_wdd_example.csv">Example — reduction with some displacement</option>
+            </select>
+            <button class="secondary" id="wddLoadSampleBtn" type="button" style="width:100%;margin-top:8px;">Load sample</button>
+            <div class="field-help">The sample shows why examining the surrounding displacement zone matters.</div>
+          </div>
+          <div>
+            <label>CSV template</label>
+            <button class="secondary" id="wddTemplateBtn" type="button" style="width:100%;">Download WDD template</button>
+            <div class="field-help">Uses simple pre/post counts only.</div>
+          </div>
+        </div>
+
+        <div class="warning-callout">
+          <strong>Important interpretation note.</strong> WDD estimates whether change in the intervention area is accompanied by displacement or diffusion in a surrounding zone, relative to matched controls. The displacement zone should be defined in advance and should not overlap the intervention area. Treatment and control areas should be comparable in baseline crime, geographic scale and historical trend. WDD does not by itself prove that an intervention caused the observed change, and results can be sensitive to the choice of control and displacement boundaries.
+        </div>
+
+        <div class="eval-counts">
+          <h3 style="margin-top:0;">Treatment and matched control</h3>
+          <div class="grid-4">
+            <div><label for="wddTreatBefore">Intervention before</label><input id="wddTreatBefore" type="number" min="0" step="1" value="250" /></div>
+            <div><label for="wddTreatAfter">Intervention after</label><input id="wddTreatAfter" type="number" min="0" step="1" value="160" /></div>
+            <div><label for="wddControlBefore">Control before</label><input id="wddControlBefore" type="number" min="0" step="1" value="245" /></div>
+            <div><label for="wddControlAfter">Control after</label><input id="wddControlAfter" type="number" min="0" step="1" value="225" /></div>
+          </div>
+        </div>
+
+        <div class="eval-counts">
+          <h3 style="margin-top:0;">Displacement zones</h3>
+          <div class="grid-4">
+            <div><label for="wddDispBefore">Intervention displacement before</label><input id="wddDispBefore" type="number" min="0" step="1" value="120" /></div>
+            <div><label for="wddDispAfter">Intervention displacement after</label><input id="wddDispAfter" type="number" min="0" step="1" value="130" /></div>
+            <div><label for="wddControlDispBefore">Control displacement before</label><input id="wddControlDispBefore" type="number" min="0" step="1" value="118" /></div>
+            <div><label for="wddControlDispAfter">Control displacement after</label><input id="wddControlDispAfter" type="number" min="0" step="1" value="120" /></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="runWddBtn" type="button">Run WDD evaluation</button>
+        </div>
+      </div>
+
+      <div id="evalStatus" class="status" role="status"></div>
     </section>
 
     <section id="results" class="hidden">
@@ -409,6 +601,37 @@
       </section>
     </section>
 
+
+    <section id="evaluationResults" class="hidden">
+      <section class="panel">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;">
+          <div>
+            <h2 style="margin-bottom:5px;" id="evalResultsTitle">Evaluation summary</h2>
+            <p class="small" id="evalResultsSubtitle"></p>
+          </div>
+          <button id="downloadEvalBtn" type="button">Download evaluation CSV</button>
+        </div>
+        <div id="evalSummaryGrid" class="summary-grid"></div>
+        <div id="evalNarrative" class="callout"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Before and after breakdown</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Area</th><th>Before</th><th>After</th><th>Change</th><th>% change</th></tr></thead>
+            <tbody id="evalBreakdownBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 id="evalChartTitle">Before and after crime counts</h2>
+        <p class="small" id="evalChartDescription"></p>
+        <div class="chart-wrap"><canvas id="evalChart"></canvas></div>
+      </section>
+    </section>
+
     <section class="panel">
       <h2>How the measures are used</h2>
 
@@ -435,8 +658,33 @@
         For the same T1-selected places, RRI compares their relative crime concentration in T2 with T1. A value of 1 means the relative concentration is unchanged; above 1 means it increased; below 1 means it decreased.
       </p>
 
+      <h3>Controlled before and after</h3>
+      <p class="formula">Absolute DiD = (T<sub>after</sub> − T<sub>before</sub>) − (C<sub>after</sub> − C<sub>before</sub>)</p>
+      <p class="formula">Relative effect = (T<sub>after</sub> / T<sub>before</sub>) ÷ (C<sub>after</sub> / C<sub>before</sub>)</p>
+      <p class="small">
+        The relative effect is generally more interpretable when treatment and comparison areas have different crime volumes. A value below 1 means the intervention area improved relative to the comparison trend. The tool also estimates the T1-equivalent expected after count by applying the control proportional change to the intervention baseline.
+      </p>
       <details>
-        <summary>Important interpretation note</summary>
+        <summary>Important interpretation note: controlled before and after</summary>
+        <p class="small" style="margin-top:10px;">
+          Treat this as a simple Difference-in-Differences-style diagnostic rather than automatic causal proof. The key assumption is that, without the intervention, the intervention and comparison areas would have followed similar trends. One before and one after period cannot test that assumption. Prefer a deliberately selected untreated comparison with similar pre-intervention crime levels and trends; using the remainder of the study area is a weaker non-equivalent comparison.
+        </p>
+      </details>
+
+      <h3>Weighted Displacement Difference (WDD)</h3>
+      <p class="formula">WDD = (ΔT − ΔC<sub>t</sub>) + (ΔD − ΔC<sub>d</sub>)</p>
+      <p class="small">
+        WDD combines change in the intervention area with change in its displacement zone, each relative to a matched control. Negative values indicate net crime reduction; a positive displacement component suggests possible spatial displacement, while a negative component suggests diffusion of benefits.
+      </p>
+      <details>
+        <summary>Important interpretation note: displacement and diffusion</summary>
+        <p class="small" style="margin-top:10px;">
+          Define the potential displacement zone before examining the outcome where possible. A larger or differently shaped zone can materially change the result. The matched control and its displacement zone should represent credible untreated comparisons. WDD separates treatment-area and surrounding-area changes, but it does not rule out other causes of change or identify movement beyond the chosen displacement boundary.
+        </p>
+      </details>
+
+      <details>
+        <summary>Important interpretation note: PAI</summary>
         <p class="small" style="margin-top:10px;">
           Classical PAI evaluates a selected hotspot area. In the prioritisation workflow this tool also calculates a <strong>unit concentration PAI</strong> for each individual spatial unit: its crime share divided by its area share. This is useful for ranking and for a rule such as PAI ≥ 10, but it should be interpreted as relative crime concentration rather than evidence of future predictive accuracy. The selected-area summary reports the standard set-level PAI and PPAI.
         </p>
@@ -449,6 +697,9 @@
           <li><a href="https://www.mdpi.com/2220-9964/10/9/597" target="_blank" rel="noopener">Penalized Predictive Accuracy Index (PPAI)</a>.</li>
           <li><a href="https://www.tandfonline.com/doi/abs/10.1080/07418825.2014.904393" target="_blank" rel="noopener">PAI and Recapture Rate Index comparison</a>.</li>
           <li><a href="https://www.mdpi.com/2673-4591/39/1/24" target="_blank" rel="noopener">Additional discussion of prediction evaluation measures</a>.</li>
+          <li><a href="https://doi.org/10.1186/s40163-018-0085-5" target="_blank" rel="noopener">Wheeler & Ratcliffe (2018), Weighted Displacement Difference</a>.</li>
+          <li><a href="https://crimede-coder.com/graphs/WDD target="_blank" rel="noopener">CRIME De-Coder WDD Tool</a>.</li>
+          <li><a href="https://doc.arcgis.com/en/arcgis-solutions/11.3/reference/weighted-displacement-difference-tool-reference.htm" target="_blank" rel="noopener">ArcGIS Solutions WDD implementation and interpretation guidance</a>.</li>
         </ul>
       </details>
     </section>
@@ -461,6 +712,7 @@
   const els = {
     modePriority: document.getElementById("modePriority"),
     modePrediction: document.getElementById("modePrediction"),
+    modeEvaluation: document.getElementById("modeEvaluation"),
     inputTitle: document.getElementById("inputTitle"),
     inputDescription: document.getElementById("inputDescription"),
     csvFile: document.getElementById("csvFile"),
@@ -489,7 +741,50 @@
     stabilityGrid: document.getElementById("stabilityGrid"),
     resultsHead: document.getElementById("resultsHead"),
     resultsBody: document.getElementById("resultsBody"),
-    downloadBtn: document.getElementById("downloadBtn")
+    downloadBtn: document.getElementById("downloadBtn"),
+    inputPanel: document.getElementById("inputPanel"),
+    evaluationPanel: document.getElementById("evaluationPanel"),
+    evaluationResults: document.getElementById("evaluationResults"),
+    evalBeforeAfterTab: document.getElementById("evalBeforeAfterTab"),
+    evalWddTab: document.getElementById("evalWddTab"),
+    evalBeforeAfterInputs: document.getElementById("evalBeforeAfterInputs"),
+    evalWddInputs: document.getElementById("evalWddInputs"),
+    evalCsvFile: document.getElementById("evalCsvFile"),
+    evalSampleDataset: document.getElementById("evalSampleDataset"),
+    evalLoadSampleBtn: document.getElementById("evalLoadSampleBtn"),
+    evalTemplateBtn: document.getElementById("evalTemplateBtn"),
+    controlBasis: document.getElementById("controlBasis"),
+    controlBasisHelp: document.getElementById("controlBasisHelp"),
+    controlBeforeLabel: document.getElementById("controlBeforeLabel"),
+    controlAfterLabel: document.getElementById("controlAfterLabel"),
+    studyControlWarning: document.getElementById("studyControlWarning"),
+    treatBefore: document.getElementById("treatBefore"),
+    treatAfter: document.getElementById("treatAfter"),
+    controlBefore: document.getElementById("controlBefore"),
+    controlAfter: document.getElementById("controlAfter"),
+    runBeforeAfterBtn: document.getElementById("runBeforeAfterBtn"),
+    wddCsvFile: document.getElementById("wddCsvFile"),
+    wddSampleDataset: document.getElementById("wddSampleDataset"),
+    wddLoadSampleBtn: document.getElementById("wddLoadSampleBtn"),
+    wddTemplateBtn: document.getElementById("wddTemplateBtn"),
+    wddTreatBefore: document.getElementById("wddTreatBefore"),
+    wddTreatAfter: document.getElementById("wddTreatAfter"),
+    wddControlBefore: document.getElementById("wddControlBefore"),
+    wddControlAfter: document.getElementById("wddControlAfter"),
+    wddDispBefore: document.getElementById("wddDispBefore"),
+    wddDispAfter: document.getElementById("wddDispAfter"),
+    wddControlDispBefore: document.getElementById("wddControlDispBefore"),
+    wddControlDispAfter: document.getElementById("wddControlDispAfter"),
+    runWddBtn: document.getElementById("runWddBtn"),
+    evalStatus: document.getElementById("evalStatus"),
+    evalResultsTitle: document.getElementById("evalResultsTitle"),
+    evalResultsSubtitle: document.getElementById("evalResultsSubtitle"),
+    evalSummaryGrid: document.getElementById("evalSummaryGrid"),
+    evalNarrative: document.getElementById("evalNarrative"),
+    evalBreakdownBody: document.getElementById("evalBreakdownBody"),
+    evalChartTitle: document.getElementById("evalChartTitle"),
+    evalChartDescription: document.getElementById("evalChartDescription"),
+    downloadEvalBtn: document.getElementById("downloadEvalBtn")
   };
 
   const SAMPLE_DATASETS = {
@@ -509,6 +804,9 @@
   let selectedSampleName = null;
   let chart = null;
   let lastResults = null;
+  let evalMethod = "before_after";
+  let evalChart = null;
+  let lastEvalResults = null;
 
   function normHeader(h) {
     return String(h ?? "")
@@ -526,6 +824,16 @@
   function clearStatus() {
     els.status.textContent = "";
     els.status.className = "status";
+  }
+
+  function setEvalStatus(message, type = "ok") {
+    els.evalStatus.textContent = message;
+    els.evalStatus.className = `status ${type}`;
+  }
+
+  function clearEvalStatus() {
+    els.evalStatus.textContent = "";
+    els.evalStatus.className = "status";
   }
 
   function pct(value, decimals = 1) {
@@ -569,6 +877,26 @@
     mode = nextMode;
     els.modePriority.classList.toggle("active", mode === "priority");
     els.modePrediction.classList.toggle("active", mode === "prediction");
+    els.modeEvaluation.classList.toggle("active", mode === "evaluation");
+
+    const isEval = mode === "evaluation";
+    els.inputPanel.classList.toggle("hidden", isEval);
+    els.evaluationPanel.classList.toggle("hidden", !isEval);
+    els.results.classList.add("hidden");
+    els.evaluationResults.classList.add("hidden");
+
+    if (isEval) {
+      selectedFile = null;
+      selectedSampleText = null;
+      selectedSampleName = null;
+      els.csvFile.value = "";
+      els.runBtn.disabled = true;
+      lastResults = null;
+      clearStatus();
+      clearEvalStatus();
+      if (chart) { chart.destroy(); chart = null; }
+      return;
+    }
 
     if (mode === "priority") {
       els.inputTitle.textContent = "Prioritise places";
@@ -586,7 +914,6 @@
     els.csvFile.value = "";
     updateSampleOptions();
     els.runBtn.disabled = true;
-    els.results.classList.add("hidden");
     lastResults = null;
     clearStatus();
     updateRuleUI();
@@ -1195,6 +1522,340 @@
     }
   }
 
+  function updateControlBasisUI() {
+    const study = els.controlBasis.value === "study";
+    els.controlBeforeLabel.textContent = study ? "Whole study area before" : "Control before";
+    els.controlAfterLabel.textContent = study ? "Whole study area after" : "Control after";
+    els.controlBasisHelp.textContent = study
+      ? "Enter totals for the whole study area including the intervention area. The intervention counts will be subtracted automatically."
+      : "Use an untreated area that is broadly comparable with the intervention area.";
+    els.studyControlWarning.classList.toggle("hidden", !study);
+  }
+
+  function setEvalMethod(method) {
+    evalMethod = method;
+    const before = method === "before_after";
+    els.evalBeforeAfterTab.classList.toggle("active", before);
+    els.evalWddTab.classList.toggle("active", !before);
+    els.evalBeforeAfterInputs.classList.toggle("hidden", !before);
+    els.evalWddInputs.classList.toggle("hidden", before);
+    els.evaluationResults.classList.add("hidden");
+    lastEvalResults = null;
+    clearEvalStatus();
+    if (evalChart) { evalChart.destroy(); evalChart = null; }
+  }
+
+  function readNonNegativeInput(el, label) {
+    const value = Number(el.value);
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${label} must be 0 or greater.`);
+    return value;
+  }
+
+  function normalCdf(x) {
+    const ax = Math.abs(x);
+    const t = 1 / (1 + 0.2316419 * ax);
+    const d = 0.3989422804014327 * Math.exp(-0.5 * ax * ax);
+    const tail = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+    return x >= 0 ? 1 - tail : tail;
+  }
+
+  function wddEvidence(z) {
+    if (!Number.isFinite(z)) return "Not calculable";
+    if (z <= -3.1) return "Very strong evidence of reduction";
+    if (z <= -2.3) return "Strong evidence of reduction";
+    if (z <= -1.6) return "Moderate evidence of reduction";
+    if (z <= -1.3) return "Weak evidence of reduction";
+    if (z < 0) return "Reduction observed, but weak statistical evidence";
+    return "No evidence of reduction";
+  }
+
+  function pctChange(before, after) {
+    if (before === 0) return after === 0 ? 0 : NaN;
+    return (after - before) / before;
+  }
+
+  function runBeforeAfter() {
+    try {
+      const t0 = readNonNegativeInput(els.treatBefore, "Intervention before");
+      const t1 = readNonNegativeInput(els.treatAfter, "Intervention after");
+      let enteredC0 = readNonNegativeInput(els.controlBefore, els.controlBasis.value === "study" ? "Study area before" : "Control before");
+      let enteredC1 = readNonNegativeInput(els.controlAfter, els.controlBasis.value === "study" ? "Study area after" : "Control after");
+      const usingStudy = els.controlBasis.value === "study";
+
+      let c0 = enteredC0;
+      let c1 = enteredC1;
+      if (usingStudy) {
+        if (enteredC0 < t0 || enteredC1 < t1) throw new Error("Whole-study-area totals cannot be smaller than the intervention-area counts.");
+        c0 = enteredC0 - t0;
+        c1 = enteredC1 - t1;
+      }
+
+      if (t0 === 0) throw new Error("Intervention before must be greater than 0 to calculate a relative effect.");
+      if (c0 === 0) throw new Error("Comparison before must be greater than 0 to calculate a relative effect.");
+
+      const deltaT = t1 - t0;
+      const deltaC = c1 - c0;
+      const absDid = deltaT - deltaC;
+      const tRatio = t1 / t0;
+      const cRatio = c1 / c0;
+      if (cRatio === 0) throw new Error("Comparison after is zero, so the proportional relative effect is undefined.");
+      const relativeEffect = tRatio / cRatio;
+      const adjustedPct = relativeEffect - 1;
+      const expectedAfter = t0 * cRatio;
+      const adjustedDifference = t1 - expectedAfter;
+      const estimatedPrevented = expectedAfter - t1;
+
+      lastEvalResults = {
+        method: "before_after",
+        usingStudy,
+        t0, t1, c0, c1,
+        enteredC0, enteredC1,
+        deltaT, deltaC, absDid,
+        treatmentPct: pctChange(t0, t1),
+        controlPct: pctChange(c0, c1),
+        relativeEffect, adjustedPct, expectedAfter, adjustedDifference, estimatedPrevented
+      };
+      renderBeforeAfter(lastEvalResults);
+      setEvalStatus("Controlled before and after evaluation complete.", "ok");
+    } catch (err) {
+      els.evaluationResults.classList.add("hidden");
+      lastEvalResults = null;
+      setEvalStatus(err.message || String(err), "err");
+    }
+  }
+
+  function renderBeforeAfter(r) {
+    els.evaluationResults.classList.remove("hidden");
+    els.evalResultsTitle.textContent = "Controlled before and after summary";
+    els.evalResultsSubtitle.textContent = r.usingStudy
+      ? "Comparison: remainder of the wider study area (whole-study totals minus intervention area)."
+      : "Comparison: selected control area.";
+
+    const adjustedLabel = r.adjustedPct <= 0 ? "Relative reduction" : "Relative increase";
+    els.evalSummaryGrid.innerHTML = [
+      metricCard("Intervention change", `${r.deltaT > 0 ? "+" : ""}${countFmt(r.deltaT)}`, pct(r.treatmentPct)),
+      metricCard("Comparison change", `${r.deltaC > 0 ? "+" : ""}${countFmt(r.deltaC)}`, pct(r.controlPct)),
+      metricCard(adjustedLabel, pct(Math.abs(r.adjustedPct)), `Relative effect ratio: ${num(r.relativeEffect, 3)}`),
+      metricCard("Expected intervention after", countFmt(r.expectedAfter), "If it followed the comparison proportional trend"),
+      metricCard("Observed − expected", `${r.adjustedDifference > 0 ? "+" : ""}${countFmt(r.adjustedDifference)}`, r.adjustedDifference < 0 ? "Fewer crimes than expected" : "More crimes than expected"),
+      metricCard("Absolute count DiD", `${r.absDid > 0 ? "+" : ""}${countFmt(r.absDid)}`, r.usingStudy ? "Do not emphasise when comparison scale is much larger" : "Change in treatment minus change in control")
+    ].join("");
+
+    const direction = r.adjustedPct < 0
+      ? `The intervention area experienced an estimated <strong>${pct(Math.abs(r.adjustedPct))} relative reduction</strong> beyond the proportional change in the comparison area.`
+      : r.adjustedPct > 0
+        ? `The intervention area experienced an estimated <strong>${pct(r.adjustedPct)} relative increase</strong> compared with the proportional change in the comparison area.`
+        : "The intervention and comparison areas changed by the same proportion.";
+    const caveat = r.usingStudy
+      ? " The wider study area is a non-equivalent comparison, so this should be treated as a descriptive adjustment rather than a causal estimate."
+      : " This remains a simple two-period comparison; stronger inference requires a credible control and evidence that pre-intervention trends were comparable.";
+    els.evalNarrative.innerHTML = `${direction} Applying the comparison trend to the intervention baseline gives an expected after count of <strong>${countFmt(r.expectedAfter)}</strong>, versus <strong>${countFmt(r.t1)}</strong> observed.${caveat}`;
+
+    els.evalBreakdownBody.innerHTML = [
+      {label:"Intervention area", before:r.t0, after:r.t1},
+      {label:r.usingStudy ? "Comparison: study area remainder" : "Control area", before:r.c0, after:r.c1}
+    ].map(d => `<tr><td>${escapeHtml(d.label)}</td><td>${countFmt(d.before)}</td><td>${countFmt(d.after)}</td><td>${d.after-d.before > 0 ? "+" : ""}${countFmt(d.after-d.before)}</td><td>${Number.isFinite(pctChange(d.before,d.after)) ? pct(pctChange(d.before,d.after)) : "—"}</td></tr>`).join("");
+
+    els.evalChartTitle.textContent = "Before and after crime counts";
+    els.evalChartDescription.textContent = r.usingStudy
+      ? "The comparison bars show the wider study area after removing the intervention-area counts."
+      : "Use the chart to compare the direction and magnitude of change in the intervention and control areas.";
+    renderEvalChart(["Intervention", r.usingStudy ? "Study area remainder" : "Control"], [r.t0, r.c0], [r.t1, r.c1]);
+  }
+
+  function runWdd() {
+    try {
+      const t0 = readNonNegativeInput(els.wddTreatBefore, "Intervention before");
+      const t1 = readNonNegativeInput(els.wddTreatAfter, "Intervention after");
+      const ct0 = readNonNegativeInput(els.wddControlBefore, "Control before");
+      const ct1 = readNonNegativeInput(els.wddControlAfter, "Control after");
+      const d0 = readNonNegativeInput(els.wddDispBefore, "Intervention displacement before");
+      const d1 = readNonNegativeInput(els.wddDispAfter, "Intervention displacement after");
+      const cd0 = readNonNegativeInput(els.wddControlDispBefore, "Control displacement before");
+      const cd1 = readNonNegativeInput(els.wddControlDispAfter, "Control displacement after");
+
+      const deltaT = t1 - t0;
+      const deltaCt = ct1 - ct0;
+      const deltaD = d1 - d0;
+      const deltaCd = cd1 - cd0;
+      const treatmentComponent = deltaT - deltaCt;
+      const displacementComponent = deltaD - deltaCd;
+      const wdd = treatmentComponent + displacementComponent;
+      const variance = t0+t1+ct0+ct1+d0+d1+cd0+cd1;
+      const se = Math.sqrt(variance);
+      const z = se > 0 ? wdd / se : NaN;
+      const pOne = Number.isFinite(z) ? normalCdf(z) : NaN;
+      const ciLow = wdd - 1.96 * se;
+      const ciHigh = wdd + 1.96 * se;
+      const evidence = wddEvidence(z);
+
+      lastEvalResults = {
+        method:"wdd", t0,t1,ct0,ct1,d0,d1,cd0,cd1,
+        deltaT,deltaCt,deltaD,deltaCd,treatmentComponent,displacementComponent,
+        wdd,variance,se,z,pOne,ciLow,ciHigh,evidence
+      };
+      renderWdd(lastEvalResults);
+      setEvalStatus("Weighted Displacement Difference evaluation complete.", "ok");
+    } catch (err) {
+      els.evaluationResults.classList.add("hidden");
+      lastEvalResults = null;
+      setEvalStatus(err.message || String(err), "err");
+    }
+  }
+
+  function renderWdd(r) {
+    els.evaluationResults.classList.remove("hidden");
+    els.evalResultsTitle.textContent = "Weighted Displacement Difference summary";
+    els.evalResultsSubtitle.textContent = "Negative WDD values indicate net reduction relative to the matched control trends.";
+
+    const dispInterpret = r.displacementComponent > 0 ? "Possible displacement" : r.displacementComponent < 0 ? "Diffusion of benefits" : "No net displacement-zone difference";
+    els.evalSummaryGrid.innerHTML = [
+      metricCard("Treatment component", `${r.treatmentComponent > 0 ? "+" : ""}${countFmt(r.treatmentComponent)}`, "ΔTreatment − ΔControl"),
+      metricCard("Displacement component", `${r.displacementComponent > 0 ? "+" : ""}${countFmt(r.displacementComponent)}`, dispInterpret),
+      metricCard("WDD", `${r.wdd > 0 ? "+" : ""}${countFmt(r.wdd)}`, "Net treatment + displacement effect"),
+      metricCard("Z WDD", num(r.z), r.evidence),
+      metricCard("One-tailed p", Number.isFinite(r.pOne) ? r.pOne.toFixed(3) : "—", "Lower values indicate stronger evidence of reduction"),
+      metricCard("95% CI for WDD", `[${countFmt(r.ciLow)}, ${countFmt(r.ciHigh)}]`, `SE: ${num(r.se)}`)
+    ].join("");
+
+    const treatmentText = r.treatmentComponent < 0
+      ? `${countFmt(Math.abs(r.treatmentComponent))} fewer incidents in the intervention area relative to its control trend`
+      : `${countFmt(r.treatmentComponent)} more incidents in the intervention area relative to its control trend`;
+    const dispText = r.displacementComponent > 0
+      ? `${countFmt(r.displacementComponent)} additional incidents in the displacement zone relative to its control, offsetting some of the treatment-area benefit`
+      : r.displacementComponent < 0
+        ? `${countFmt(Math.abs(r.displacementComponent))} fewer incidents in the displacement zone relative to its control, consistent with diffusion of benefits`
+        : "no net difference in the displacement zone relative to its control";
+    els.evalNarrative.innerHTML = `The treatment component indicates <strong>${treatmentText}</strong>. The displacement component indicates <strong>${dispText}</strong>. Combined WDD = <strong>${countFmt(r.wdd)}</strong> and Z = <strong>${num(r.z)}</strong>: <strong>${escapeHtml(r.evidence)}</strong>. The evidence labels are practical guidance, not a substitute for assessing control suitability, intervention timing and other plausible explanations.`;
+
+    const rows = [
+      {label:"Intervention area", before:r.t0, after:r.t1},
+      {label:"Control area", before:r.ct0, after:r.ct1},
+      {label:"Intervention displacement", before:r.d0, after:r.d1},
+      {label:"Control displacement", before:r.cd0, after:r.cd1}
+    ];
+    els.evalBreakdownBody.innerHTML = rows.map(d => `<tr><td>${escapeHtml(d.label)}</td><td>${countFmt(d.before)}</td><td>${countFmt(d.after)}</td><td>${d.after-d.before > 0 ? "+" : ""}${countFmt(d.after-d.before)}</td><td>${Number.isFinite(pctChange(d.before,d.after)) ? pct(pctChange(d.before,d.after)) : "—"}</td></tr>`).join("");
+    els.evalChartTitle.textContent = "WDD before and after crime counts";
+    els.evalChartDescription.textContent = "The WDD calculation uses absolute changes in these four areas. Comparable control counts and historical trends are important.";
+    renderEvalChart(["Intervention","Control","Intervention displacement","Control displacement"], [r.t0,r.ct0,r.d0,r.cd0], [r.t1,r.ct1,r.d1,r.cd1]);
+  }
+
+  function renderEvalChart(labels, before, after) {
+    if (evalChart) evalChart.destroy();
+    evalChart = new Chart(document.getElementById("evalChart"), {
+      type: "bar",
+      data: { labels, datasets: [
+        { label: "Before", data: before },
+        { label: "After", data: after }
+      ]},
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: true } },
+        scales: { y: { beginAtZero: true, title: { display:true, text:"Crime count" } } }
+      }
+    });
+  }
+
+  function evalRowKey(value) {
+    return String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g,"_");
+  }
+
+  function parseEvalCsvText(text, method) {
+    Papa.parse(text, {
+      header:true,
+      skipEmptyLines:"greedy",
+      transformHeader:normHeader,
+      complete:(results) => {
+        try {
+          if (results.errors?.length) throw new Error(`CSV parse error: ${results.errors[0].message}`);
+          const fields=(results.meta.fields||[]).map(normHeader);
+          for (const req of ["area_type","before","after"]) if (!fields.includes(req)) throw new Error(`Missing required column: ${req}.`);
+          const rows=results.data.map(row => ({
+            key:evalRowKey(row.area_type),
+            before:Number(String(row.before??"").replaceAll(",","")),
+            after:Number(String(row.after??"").replaceAll(",",""))
+          }));
+          rows.forEach((r,i)=>{ if(!Number.isFinite(r.before)||r.before<0||!Number.isFinite(r.after)||r.after<0) throw new Error(`Row ${i+2}: before and after must be non-negative numbers.`); });
+          const find=(keys)=>rows.find(r=>keys.includes(r.key));
+
+          if (method === "before_after") {
+            const t=find(["intervention","treatment","response","response_area"]);
+            const c=find(["control","comparison","control_area"]);
+            const study=find(["study_area_total","study_area","whole_study_area","wider_study_area"]);
+            if (!t || (!c && !study)) throw new Error("CSV needs intervention plus either control or study_area_total rows.");
+            els.treatBefore.value=t.before; els.treatAfter.value=t.after;
+            if (c) {
+              els.controlBasis.value="matched";
+              els.controlBefore.value=c.before; els.controlAfter.value=c.after;
+            } else {
+              els.controlBasis.value="study";
+              els.controlBefore.value=study.before; els.controlAfter.value=study.after;
+            }
+            updateControlBasisUI();
+            runBeforeAfter();
+          } else {
+            const t=find(["intervention","treatment","response","response_area"]);
+            const c=find(["control","control_area","control_treatment"]);
+            const d=find(["displacement","intervention_displacement","response_displacement","treatment_displacement"]);
+            const cd=find(["control_displacement","control_displacement_area"]);
+            if (!t||!c||!d||!cd) throw new Error("WDD CSV needs intervention, control, displacement and control_displacement rows.");
+            els.wddTreatBefore.value=t.before; els.wddTreatAfter.value=t.after;
+            els.wddControlBefore.value=c.before; els.wddControlAfter.value=c.after;
+            els.wddDispBefore.value=d.before; els.wddDispAfter.value=d.after;
+            els.wddControlDispBefore.value=cd.before; els.wddControlDispAfter.value=cd.after;
+            runWdd();
+          }
+        } catch(err) { setEvalStatus(err.message||String(err),"err"); }
+      }
+    });
+  }
+
+  async function loadEvalSample(filename, method) {
+    setEvalStatus(`Loading ${filename}…`,"ok");
+    try {
+      const response=await fetch(`./${filename}`,{cache:"no-store"});
+      if(!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text=await response.text();
+      parseEvalCsvText(text,method);
+    } catch(err) {
+      setEvalStatus(`Could not load ${filename}. Keep the sample CSV in the same folder as index.html and serve the page through GitHub Pages or a local web server. (${err.message||err})`,"err");
+    }
+  }
+
+  function exportEvalRows(r) {
+    if (r.method === "before_after") return [{
+      method:"controlled_before_after",
+      comparison_type:r.usingStudy ? "study_area_remainder_non_equivalent" : "selected_control",
+      intervention_before:r.t0,
+      intervention_after:r.t1,
+      comparison_before:r.c0,
+      comparison_after:r.c1,
+      intervention_change:r.deltaT,
+      comparison_change:r.deltaC,
+      absolute_difference_in_differences:r.absDid,
+      intervention_pct_change:r.treatmentPct,
+      comparison_pct_change:r.controlPct,
+      relative_effect_ratio:r.relativeEffect,
+      adjusted_relative_change:r.adjustedPct,
+      expected_intervention_after_if_followed_comparison_trend:r.expectedAfter,
+      observed_minus_expected:r.adjustedDifference,
+      estimated_crimes_prevented_vs_comparison_trend:r.estimatedPrevented
+    }];
+    return [{
+      method:"weighted_displacement_difference",
+      intervention_before:r.t0, intervention_after:r.t1,
+      control_before:r.ct0, control_after:r.ct1,
+      displacement_before:r.d0, displacement_after:r.d1,
+      control_displacement_before:r.cd0, control_displacement_after:r.cd1,
+      treatment_component:r.treatmentComponent,
+      displacement_component:r.displacementComponent,
+      wdd:r.wdd, standard_error:r.se, z_wdd:r.z,
+      one_tailed_p:r.pOne, ci95_low:r.ciLow, ci95_high:r.ciHigh,
+      evidence:r.evidence
+    }];
+  }
+
   function downloadCsv(filename, rows) {
     const csv = Papa.unparse(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1282,8 +1943,33 @@
     }
   }
 
+  function downloadEvalTemplate() {
+    downloadCsv("controlled_before_after_example.csv", [
+      {area_type:"intervention", before:120, after:85},
+      {area_type:"control", before:118, after:108}
+    ]);
+  }
+
+  function downloadWddTemplate() {
+    downloadCsv("wdd_evaluation_example.csv", [
+      {area_type:"intervention", before:250, after:160},
+      {area_type:"control", before:245, after:225},
+      {area_type:"displacement", before:120, after:130},
+      {area_type:"control_displacement", before:118, after:120}
+    ]);
+  }
+
+  function readEvalFile(file, method) {
+    if (!file) return;
+    const reader=new FileReader();
+    reader.onload=()=>parseEvalCsvText(String(reader.result||""),method);
+    reader.onerror=()=>setEvalStatus("Could not read the selected CSV.","err");
+    reader.readAsText(file);
+  }
+
   els.modePriority.addEventListener("click", () => setMode("priority"));
   els.modePrediction.addEventListener("click", () => setMode("prediction"));
+  els.modeEvaluation.addEventListener("click", () => setMode("evaluation"));
   els.priorityRule.addEventListener("change", updateRuleUI);
   els.alpha.addEventListener("input", () => { els.alphaValue.textContent = Number(els.alpha.value).toFixed(2); });
   els.sampleBtn.addEventListener("click", downloadSample);
@@ -1310,6 +1996,29 @@
     const filename = lastResults.mode === "priority" ? "place_priority_results.csv" : "prediction_evaluation_results.csv";
     downloadCsv(filename, exportRows(lastResults));
   });
+
+  els.evalBeforeAfterTab.addEventListener("click", () => setEvalMethod("before_after"));
+  els.evalWddTab.addEventListener("click", () => setEvalMethod("wdd"));
+  els.controlBasis.addEventListener("change", updateControlBasisUI);
+  els.runBeforeAfterBtn.addEventListener("click", runBeforeAfter);
+  els.runWddBtn.addEventListener("click", runWdd);
+  els.evalCsvFile.addEventListener("change", e => readEvalFile(e.target.files?.[0], "before_after"));
+  els.wddCsvFile.addEventListener("change", e => readEvalFile(e.target.files?.[0], "wdd"));
+  els.evalLoadSampleBtn.addEventListener("click", () => loadEvalSample(els.evalSampleDataset.value, "before_after"));
+  els.wddLoadSampleBtn.addEventListener("click", () => loadEvalSample(els.wddSampleDataset.value, "wdd"));
+  els.evalTemplateBtn.addEventListener("click", downloadEvalTemplate);
+  els.wddTemplateBtn.addEventListener("click", downloadWddTemplate);
+  els.downloadEvalBtn.addEventListener("click", () => {
+    if (!lastEvalResults) return;
+    downloadCsv(lastEvalResults.method === "wdd" ? "wdd_evaluation_results.csv" : "controlled_before_after_results.csv", exportEvalRows(lastEvalResults));
+  });
+
+  els.evalSampleDataset.innerHTML = [
+    '<option value="evaluation_before_after_example.csv">Example — matched control</option>',
+    '<option value="evaluation_study_area_example.csv">Example — wider study area comparison</option>'
+  ].join("");
+  updateControlBasisUI();
+  setEvalMethod("before_after");
 
   updateSampleOptions();
   updateRuleUI();
