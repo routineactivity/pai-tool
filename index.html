@@ -295,16 +295,24 @@
         Upload one row per spatial unit with <code>unit_id</code>, <code>area</code> and <code>crime_count</code>.
       </p>
 
-      <div class="grid-2">
+      <div class="grid-3">
         <div>
-          <label for="csvFile">CSV file</label>
+          <label for="csvFile">Upload your CSV</label>
           <input type="file" id="csvFile" accept=".csv,text/csv" />
           <div class="field-help" id="columnHelp">Required: unit_id, area, crime_count</div>
         </div>
         <div>
-          <label>Example input</label>
-          <button class="secondary" id="sampleBtn" type="button">Download example CSV</button>
-          <div class="field-help">Use the example to check the required structure.</div>
+          <label for="sampleDataset">Built-in sample dataset</label>
+          <select id="sampleDataset">
+            <option value="">Choose a sample…</option>
+          </select>
+          <button class="secondary" id="loadSampleBtn" type="button" disabled style="width:100%;margin-top:8px;">Load sample</button>
+          <div class="field-help" id="sampleHelp">Choose a sample for this analysis mode.</div>
+        </div>
+        <div>
+          <label>CSV template</label>
+          <button class="secondary" id="sampleBtn" type="button" style="width:100%;">Download template CSV</button>
+          <div class="field-help">Download a small template showing the required columns.</div>
         </div>
       </div>
 
@@ -457,6 +465,9 @@
     inputDescription: document.getElementById("inputDescription"),
     csvFile: document.getElementById("csvFile"),
     columnHelp: document.getElementById("columnHelp"),
+    sampleDataset: document.getElementById("sampleDataset"),
+    loadSampleBtn: document.getElementById("loadSampleBtn"),
+    sampleHelp: document.getElementById("sampleHelp"),
     sampleBtn: document.getElementById("sampleBtn"),
     priorityRule: document.getElementById("priorityRule"),
     ruleValue: document.getElementById("ruleValue"),
@@ -481,8 +492,21 @@
     downloadBtn: document.getElementById("downloadBtn")
   };
 
+  const SAMPLE_DATASETS = {
+    priority: [
+      { file: "robbery_area_selection.csv", label: "Robbery — prioritise places" },
+      { file: "theft_person_area_selection.csv", label: "Theft from person — prioritise places" }
+    ],
+    prediction: [
+      { file: "robbery_test_accuracy.csv", label: "Robbery — test prediction" },
+      { file: "theft_person_test_accuracy.csv", label: "Theft from person — test prediction" }
+    ]
+  };
+
   let mode = "priority";
   let selectedFile = null;
+  let selectedSampleText = null;
+  let selectedSampleName = null;
   let chart = null;
   let lastResults = null;
 
@@ -531,6 +555,16 @@
       .replaceAll("'", "&#039;");
   }
 
+  function updateSampleOptions() {
+    const samples = SAMPLE_DATASETS[mode] || [];
+    els.sampleDataset.innerHTML = '<option value="">Choose a sample…</option>' +
+      samples.map(s => `<option value="${escapeHtml(s.file)}">${escapeHtml(s.label)}</option>`).join("");
+    els.loadSampleBtn.disabled = true;
+    els.sampleHelp.textContent = mode === "priority"
+      ? "London robbery or theft-from-person data for place prioritisation."
+      : "London robbery or theft-from-person T1/T2 data for prediction testing.";
+  }
+
   function setMode(nextMode) {
     mode = nextMode;
     els.modePriority.classList.toggle("active", mode === "priority");
@@ -547,7 +581,10 @@
     }
 
     selectedFile = null;
+    selectedSampleText = null;
+    selectedSampleName = null;
     els.csvFile.value = "";
+    updateSampleOptions();
     els.runBtn.disabled = true;
     els.results.classList.add("hidden");
     lastResults = null;
@@ -613,11 +650,14 @@
     return `top ${rule.value} unit${rule.value === 1 ? "" : "s"}`;
   }
 
-  function parseSelectedFile() {
-    if (!selectedFile) return;
+  function parseCurrentInput() {
+    const source = selectedFile || selectedSampleText;
+    if (!source) return;
 
-    setStatus("Reading CSV…", "ok");
-    Papa.parse(selectedFile, {
+    const sourceLabel = selectedFile ? selectedFile.name : selectedSampleName;
+    setStatus(`Reading ${sourceLabel}…`, "ok");
+
+    Papa.parse(source, {
       header: true,
       skipEmptyLines: "greedy",
       dynamicTyping: false,
@@ -635,7 +675,7 @@
             ? analysePriority(clean, rule, alpha)
             : analysePrediction(clean, rule, alpha);
           renderResults(lastResults);
-          setStatus(`Analysis complete. ${clean.length.toLocaleString()} spatial units processed.`, "ok");
+          setStatus(`Analysis complete. ${clean.length.toLocaleString()} spatial units processed from ${sourceLabel}.`, "ok");
         } catch (err) {
           els.results.classList.add("hidden");
           lastResults = null;
@@ -646,6 +686,39 @@
         setStatus(`Could not read the CSV: ${err.message}`, "err");
       }
     });
+  }
+
+  async function loadSelectedSample() {
+    const filename = els.sampleDataset.value;
+    if (!filename) return;
+
+    const sample = (SAMPLE_DATASETS[mode] || []).find(s => s.file === filename);
+    const label = sample?.label || filename;
+
+    setStatus(`Loading sample: ${label}…`, "ok");
+    els.loadSampleBtn.disabled = true;
+
+    try {
+      const response = await fetch(`./${filename}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      selectedSampleText = await response.text();
+      selectedSampleName = label;
+      selectedFile = null;
+      els.csvFile.value = "";
+      els.runBtn.disabled = false;
+      parseCurrentInput();
+    } catch (err) {
+      selectedSampleText = null;
+      selectedSampleName = null;
+      els.runBtn.disabled = true;
+      setStatus(
+        `Could not load ${filename}. The sample files must be in the same folder as index.html and the page must be served through GitHub Pages or a local web server. (${err.message || err})`,
+        "err"
+      );
+    } finally {
+      els.loadSampleBtn.disabled = !els.sampleDataset.value;
+    }
   }
 
   function validateAndClean(rows, fields) {
@@ -1214,8 +1287,16 @@
   els.priorityRule.addEventListener("change", updateRuleUI);
   els.alpha.addEventListener("input", () => { els.alphaValue.textContent = Number(els.alpha.value).toFixed(2); });
   els.sampleBtn.addEventListener("click", downloadSample);
+  els.sampleDataset.addEventListener("change", () => {
+    els.loadSampleBtn.disabled = !els.sampleDataset.value;
+  });
+  els.loadSampleBtn.addEventListener("click", loadSelectedSample);
   els.csvFile.addEventListener("change", (event) => {
     selectedFile = event.target.files?.[0] || null;
+    selectedSampleText = null;
+    selectedSampleName = null;
+    els.sampleDataset.value = "";
+    els.loadSampleBtn.disabled = true;
     els.runBtn.disabled = !selectedFile;
     els.results.classList.add("hidden");
     lastResults = null;
@@ -1223,13 +1304,14 @@
     if (selectedFile) setStatus(`Selected ${selectedFile.name}. Click Run analysis.`, "ok");
     else clearStatus();
   });
-  els.runBtn.addEventListener("click", parseSelectedFile);
+  els.runBtn.addEventListener("click", parseCurrentInput);
   els.downloadBtn.addEventListener("click", () => {
     if (!lastResults) return;
     const filename = lastResults.mode === "priority" ? "place_priority_results.csv" : "prediction_evaluation_results.csv";
     downloadCsv(filename, exportRows(lastResults));
   });
 
+  updateSampleOptions();
   updateRuleUI();
 })();
 </script>
