@@ -436,3 +436,7 @@ GitHub Pages will serve the root `index.html` as the application homepage.
 This tool provides descriptive, predictive and simple quasi-experimental evaluation measures for aggregated spatial crime data. Results depend on the spatial units, time periods, crime definitions, comparison areas and priority rules chosen by the analyst.
 
 The evaluation methods are intended as transparent analytical diagnostics rather than substitutes for stronger research designs. Where possible, analysts should use multiple pre-intervention periods, deliberately selected comparison areas and sensitivity checks around intervention and displacement boundaries.
+
+## Acknowledgement
+
+This tool was developed with assistance from OpenAI ChatGPT, which was used to support code development, debugging, interface design and documentation. The analytical approach, methodological choices and final implementation were reviewed and directed by the repository author.
