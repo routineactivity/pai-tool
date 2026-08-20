@@ -3,194 +3,1222 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PAI Diagnostic Tool</title>
+  <meta name="description" content="A browser-based tool for place-based crime concentration, prioritisation and hotspot prediction evaluation using PAI, PPAI, RRI and hit rate." />
+  <title>Place-Based Crime Analysis Tool</title>
 
-  <!-- Chart -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Robust CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; max-width: 980px; }
-    h1 { margin-bottom: 8px; }
-    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    #status { margin-top: 10px; padding: 10px; border-radius: 6px; }
-    .ok { background: #eef7ee; }
-    .err { background: #fdeeee; }
-    #summary { font-size: 18px; margin: 18px 0; font-weight: bold; }
-    canvas { margin-top: 20px; }
-    button { padding: 8px 14px; cursor: pointer; }
-    code { background: #f4f4f4; padding: 1px 4px; border-radius: 4px; }
+    :root {
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --surface-2: #f0f3f7;
+      --text: #17202a;
+      --muted: #5e6a75;
+      --border: #d6dce3;
+      --accent: #1f5f99;
+      --accent-dark: #17466f;
+      --good-bg: #edf7ef;
+      --good-text: #245c31;
+      --warn-bg: #fff7e6;
+      --warn-text: #6d4c10;
+      --error-bg: #fdeeee;
+      --error-text: #7a2525;
+      --shadow: 0 4px 18px rgba(22, 34, 50, 0.07);
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 34px 22px 60px;
+    }
+
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.8rem, 4vw, 2.6rem); }
+    h2 { margin-top: 0; }
+    h3 { margin-bottom: 8px; }
+    p { margin-top: 0; }
+    a { color: var(--accent); }
+
+    code {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    .lede {
+      color: var(--muted);
+      max-width: 900px;
+      margin-bottom: 26px;
+      font-size: 1.04rem;
+    }
+
+    .privacy-note {
+      display: inline-block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: #eaf2f9;
+      color: #244b6d;
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 12px 0 28px;
+    }
+
+    .mode-card {
+      border: 2px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px;
+      cursor: pointer;
+      text-align: left;
+      box-shadow: var(--shadow);
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .mode-card:hover { transform: translateY(-1px); border-color: #9fb7cc; }
+    .mode-card.active { border-color: var(--accent); }
+    .mode-card strong { display: block; font-size: 1.15rem; margin-bottom: 5px; }
+    .mode-card span { color: var(--muted); }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+
+    .hidden { display: none !important; }
+
+    .grid-2, .grid-3, .grid-4 {
+      display: grid;
+      gap: 14px;
+    }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    input[type="number"], select, input[type="file"] {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: white;
+      color: var(--text);
+      font: inherit;
+    }
+
+    input[type="range"] { width: 100%; }
+
+    .field-help {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: 5px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 15px;
+      background: var(--accent);
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--accent-dark); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary {
+      background: #e7edf3;
+      color: #243746;
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover { background: #dce5ed; }
+
+    .status {
+      border-radius: 7px;
+      padding: 10px 12px;
+      margin-top: 14px;
+      display: none;
+    }
+    .status.ok { display: block; background: var(--good-bg); color: var(--good-text); }
+    .status.warn { display: block; background: var(--warn-bg); color: var(--warn-text); }
+    .status.err { display: block; background: var(--error-bg); color: var(--error-text); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .metric {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+    .metric .label { color: var(--muted); font-size: 0.82rem; margin-bottom: 4px; }
+    .metric .value { font-size: 1.45rem; font-weight: 700; }
+    .metric .sub { color: var(--muted); font-size: 0.8rem; margin-top: 3px; }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      background: #f3f8fc;
+      margin: 15px 0;
+    }
+
+    .chart-wrap {
+      position: relative;
+      min-height: 390px;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 760px;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th { background: var(--surface-2); position: sticky; top: 0; }
+    tr.priority-row { background: #f4f9fd; }
+
+    .small { font-size: 0.85rem; color: var(--muted); }
+    .formula { font-family: Georgia, serif; font-size: 1.05rem; }
+    .spacer { height: 4px; }
+
+    details {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+    summary { cursor: pointer; font-weight: 700; }
+
+    @media (max-width: 900px) {
+      .grid-4, .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 650px) {
+      .page { padding: 22px 14px 40px; }
+      .mode-grid, .grid-2, .grid-4, .summary-grid { grid-template-columns: 1fr; }
+      .panel { padding: 16px; }
+    }
   </style>
 </head>
-
 <body>
-  <h1>Predictive Accuracy Index (PAI) Diagnostic</h1>
-  <p>
-    Upload a CSV with columns <code>unit_id</code>, <code>area</code>, <code>crime_count</code>.
-    PAI per unit = (crime share) ÷ (area share).
-  </p>
+  <main class="page">
+    <h1>Place-Based Crime Analysis Tool</h1>
+    <p class="lede">
+      Prioritise high-crime places or test how well an earlier period identifies crime in a future period.
+      The tool reports crime capture, PAI, PPAI and, for temporal evaluation, the Recapture Rate Index (RRI).
+    </p>
+    <div class="privacy-note">CSV data are processed in your browser and are not uploaded to a server by this page.</div>
 
-  <div class="row">
-    <input type="file" id="csvFile" accept=".csv" />
-    <button id="runBtn" disabled>Run</button>
-  </div>
+    <section class="mode-grid" aria-label="Analysis type">
+      <button class="mode-card active" id="modePriority" type="button">
+        <strong>1. Prioritise places</strong>
+        <span>Find the units with the greatest crime concentration and estimate the possible study-area impact of intervention.</span>
+      </button>
+      <button class="mode-card" id="modePrediction" type="button">
+        <strong>2. Test a prediction</strong>
+        <span>Use crime in T1 to select priority places, then measure how much crime those places capture in T2.</span>
+      </button>
+    </section>
 
-  <div id="status"></div>
-  <div id="summary"></div>
-  <canvas id="paiChart" width="900" height="420"></canvas>
+    <section class="panel" id="inputPanel">
+      <h2 id="inputTitle">Prioritise places</h2>
+      <p id="inputDescription">
+        Upload one row per spatial unit with <code>unit_id</code>, <code>area</code> and <code>crime_count</code>.
+      </p>
+
+      <div class="grid-2">
+        <div>
+          <label for="csvFile">CSV file</label>
+          <input type="file" id="csvFile" accept=".csv,text/csv" />
+          <div class="field-help" id="columnHelp">Required: unit_id, area, crime_count</div>
+        </div>
+        <div>
+          <label>Example input</label>
+          <button class="secondary" id="sampleBtn" type="button">Download example CSV</button>
+          <div class="field-help">Use the example to check the required structure.</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <hr style="border:0;border-top:1px solid var(--border);margin:20px 0;" />
+
+      <div class="grid-4">
+        <div>
+          <label for="priorityRule">Priority definition</label>
+          <select id="priorityRule">
+            <option value="pai">Unit PAI threshold</option>
+            <option value="area">Top % of study area</option>
+            <option value="crime">Top % of T1/current crime</option>
+            <option value="units">Top N units</option>
+          </select>
+          <div class="field-help">Units are ranked by crime density.</div>
+        </div>
+        <div id="ruleValueWrap">
+          <label for="ruleValue" id="ruleValueLabel">Unit PAI threshold</label>
+          <input id="ruleValue" type="number" min="0" step="0.1" value="10" />
+          <div class="field-help" id="ruleValueHelp">Default: PAI ≥ 10.</div>
+        </div>
+        <div>
+          <label for="alpha">PPAI α: <span id="alphaValue">0.50</span></label>
+          <input id="alpha" type="range" min="0" max="1" step="0.05" value="0.5" />
+          <div class="field-help">0 = hit rate; 1 = PAI.</div>
+        </div>
+        <div style="display:flex;align-items:end;">
+          <button id="runBtn" type="button" disabled style="width:100%;">Run analysis</button>
+        </div>
+      </div>
+
+      <div id="status" class="status" role="status"></div>
+    </section>
+
+    <section id="results" class="hidden">
+      <section class="panel">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;">
+          <div>
+            <h2 style="margin-bottom:5px;">Results summary</h2>
+            <p class="small" id="selectionDescription"></p>
+          </div>
+          <button id="downloadBtn" type="button">Download results CSV</button>
+        </div>
+        <div id="summaryGrid" class="summary-grid"></div>
+        <div id="summaryNarrative" class="callout"></div>
+      </section>
+
+      <section class="panel" id="interventionPanel">
+        <h2>Intervention scenarios</h2>
+        <p class="small">
+          These are simple arithmetic scenarios, not causal forecasts. They assume the stated reduction occurs in the selected priority places and no displacement or diffusion elsewhere.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Reduction in selected places</th>
+                <th>Estimated crimes prevented</th>
+                <th>Study-area reduction</th>
+                <th>Remaining study-area crime</th>
+              </tr>
+            </thead>
+            <tbody id="scenarioBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 id="chartTitle">Crime concentration curve</h2>
+        <p class="small" id="chartDescription"></p>
+        <div class="chart-wrap">
+          <canvas id="mainChart"></canvas>
+        </div>
+      </section>
+
+      <section class="panel" id="stabilityPanel">
+        <h2>Priority-place stability</h2>
+        <p class="small">
+          The same priority rule is also applied independently to T2 for descriptive comparison. T2 selection is not used to calculate the predictive hit rate.
+        </p>
+        <div id="stabilityGrid" class="summary-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Ranked units</h2>
+        <p class="small" id="tableNote">Showing the first 50 ranked units. The download contains all rows and calculated fields.</p>
+        <div class="table-wrap">
+          <table id="resultsTable">
+            <thead id="resultsHead"></thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="panel">
+      <h2>How the measures are used</h2>
+
+      <h3>Hit / capture rate</h3>
+      <p class="formula">Hit rate = crime in selected places ÷ total crime</p>
+      <p class="small">In the prediction workflow, this is the proportion of T2 crime occurring in places selected from T1.</p>
+
+      <h3>Predictive Accuracy Index (PAI)</h3>
+      <p class="formula">PAI = (n / N) ÷ (a / A)</p>
+      <p class="small">
+        <em>n</em> is crime in the selected area, <em>N</em> is all crime, <em>a</em> is selected area and <em>A</em> is total study area.
+        PAI = 1 represents study-area-average crime density; PAI = 10 represents ten times that average density.
+      </p>
+
+      <h3>Penalized Predictive Accuracy Index (PPAI)</h3>
+      <p class="formula">PPAI = (n / N) ÷ (a / A)<sup>α</sup>, &nbsp; 0 ≤ α ≤ 1</p>
+      <p class="small">
+        α controls how strongly spatial coverage is weighted. At α = 0, PPAI equals hit rate. At α = 1, it equals PAI.
+      </p>
+
+      <h3>Recapture Rate Index (RRI)</h3>
+      <p class="formula">RRI = PAI<sub>T2</sub> ÷ PAI<sub>T1</sub></p>
+      <p class="small">
+        For the same T1-selected places, RRI compares their relative crime concentration in T2 with T1. A value of 1 means the relative concentration is unchanged; above 1 means it increased; below 1 means it decreased.
+      </p>
+
+      <details>
+        <summary>Important interpretation note</summary>
+        <p class="small" style="margin-top:10px;">
+          Classical PAI evaluates a selected hotspot area. In the prioritisation workflow this tool also calculates a <strong>unit concentration PAI</strong> for each individual spatial unit: its crime share divided by its area share. This is useful for ranking and for a rule such as PAI ≥ 10, but it should be interpreted as relative crime concentration rather than evidence of future predictive accuracy. The selected-area summary reports the standard set-level PAI and PPAI.
+        </p>
+      </details>
+
+      <details>
+        <summary>References</summary>
+        <ul class="small">
+          <li>Chainey, Tompson & Uhlig (2008), Predictive Accuracy Index.</li>
+          <li><a href="https://www.mdpi.com/2220-9964/10/9/597" target="_blank" rel="noopener">Penalized Predictive Accuracy Index (PPAI)</a>.</li>
+          <li><a href="https://www.tandfonline.com/doi/abs/10.1080/07418825.2014.904393" target="_blank" rel="noopener">PAI and Recapture Rate Index comparison</a>.</li>
+          <li><a href="https://www.mdpi.com/2673-4591/39/1/24" target="_blank" rel="noopener">Additional discussion of prediction evaluation measures</a>.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
 
 <script>
-  const fileInput = document.getElementById("csvFile");
-  const runBtn = document.getElementById("runBtn");
-  const statusEl = document.getElementById("status");
-  const summaryEl = document.getElementById("summary");
+(() => {
+  "use strict";
 
+  const els = {
+    modePriority: document.getElementById("modePriority"),
+    modePrediction: document.getElementById("modePrediction"),
+    inputTitle: document.getElementById("inputTitle"),
+    inputDescription: document.getElementById("inputDescription"),
+    csvFile: document.getElementById("csvFile"),
+    columnHelp: document.getElementById("columnHelp"),
+    sampleBtn: document.getElementById("sampleBtn"),
+    priorityRule: document.getElementById("priorityRule"),
+    ruleValue: document.getElementById("ruleValue"),
+    ruleValueLabel: document.getElementById("ruleValueLabel"),
+    ruleValueHelp: document.getElementById("ruleValueHelp"),
+    alpha: document.getElementById("alpha"),
+    alphaValue: document.getElementById("alphaValue"),
+    runBtn: document.getElementById("runBtn"),
+    status: document.getElementById("status"),
+    results: document.getElementById("results"),
+    selectionDescription: document.getElementById("selectionDescription"),
+    summaryGrid: document.getElementById("summaryGrid"),
+    summaryNarrative: document.getElementById("summaryNarrative"),
+    interventionPanel: document.getElementById("interventionPanel"),
+    scenarioBody: document.getElementById("scenarioBody"),
+    chartTitle: document.getElementById("chartTitle"),
+    chartDescription: document.getElementById("chartDescription"),
+    stabilityPanel: document.getElementById("stabilityPanel"),
+    stabilityGrid: document.getElementById("stabilityGrid"),
+    resultsHead: document.getElementById("resultsHead"),
+    resultsBody: document.getElementById("resultsBody"),
+    downloadBtn: document.getElementById("downloadBtn")
+  };
+
+  let mode = "priority";
   let selectedFile = null;
   let chart = null;
+  let lastResults = null;
 
-  function setStatus(msg, ok=true) {
-    statusEl.textContent = msg;
-    statusEl.className = ok ? "ok" : "err";
-  }
-
-  // normalise headers: trim, lowercase, remove BOM
   function normHeader(h) {
-    return (h || "")
-      .replace(/^\uFEFF/, "")     // strip BOM
+    return String(h ?? "")
+      .replace(/^\uFEFF/, "")
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/\s+/g, "_");
   }
 
-  // accept a few common header variants (optional but helpful)
-  function findCol(headers, candidates) {
-    for (const c of candidates) {
-      const idx = headers.indexOf(c);
-      if (idx !== -1) return idx;
+  function setStatus(message, type = "ok") {
+    els.status.textContent = message;
+    els.status.className = `status ${type}`;
+  }
+
+  function clearStatus() {
+    els.status.textContent = "";
+    els.status.className = "status";
+  }
+
+  function pct(value, decimals = 1) {
+    if (!Number.isFinite(value)) return "—";
+    return `${(value * 100).toFixed(decimals)}%`;
+  }
+
+  function num(value, decimals = 2) {
+    if (!Number.isFinite(value)) return "—";
+    return Number(value).toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
+  }
+
+  function countFmt(value) {
+    if (!Number.isFinite(value)) return "—";
+    return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function setMode(nextMode) {
+    mode = nextMode;
+    els.modePriority.classList.toggle("active", mode === "priority");
+    els.modePrediction.classList.toggle("active", mode === "prediction");
+
+    if (mode === "priority") {
+      els.inputTitle.textContent = "Prioritise places";
+      els.inputDescription.innerHTML = "Upload one row per spatial unit with <code>unit_id</code>, <code>area</code> and <code>crime_count</code>.";
+      els.columnHelp.textContent = "Required: unit_id, area, crime_count";
+    } else {
+      els.inputTitle.textContent = "Test a prediction";
+      els.inputDescription.innerHTML = "Upload one row per spatial unit with <code>unit_id</code>, <code>area</code>, <code>crime_count_t1</code> and <code>crime_count_t2</code>. T1 is used to choose priority places; T2 is used to evaluate them.";
+      els.columnHelp.textContent = "Required: unit_id, area, crime_count_t1, crime_count_t2";
     }
-    return -1;
+
+    selectedFile = null;
+    els.csvFile.value = "";
+    els.runBtn.disabled = true;
+    els.results.classList.add("hidden");
+    lastResults = null;
+    clearStatus();
+    updateRuleUI();
+    if (chart) { chart.destroy(); chart = null; }
   }
 
-  fileInput.addEventListener("change", (e) => {
-    selectedFile = e.target.files[0] || null;
-    runBtn.disabled = !selectedFile;
-    summaryEl.textContent = "";
-    if (chart) { chart.destroy(); chart = null; }
-    if (selectedFile) setStatus(`Selected: ${selectedFile.name}. Click Run.`, true);
-    else setStatus("", true);
-  });
+  function updateRuleUI() {
+    const rule = els.priorityRule.value;
+    if (rule === "pai") {
+      els.ruleValueLabel.textContent = "Unit PAI threshold";
+      els.ruleValue.min = "0";
+      els.ruleValue.max = "";
+      els.ruleValue.step = "0.1";
+      els.ruleValue.value = "10";
+      els.ruleValueHelp.textContent = "Units with PAI ≥ threshold are selected.";
+    } else if (rule === "area") {
+      els.ruleValueLabel.textContent = "Target area (%)";
+      els.ruleValue.min = "0.1";
+      els.ruleValue.max = "100";
+      els.ruleValue.step = "0.1";
+      els.ruleValue.value = "5";
+      els.ruleValueHelp.textContent = "Whole units are selected, so actual coverage may exceed the target slightly.";
+    } else if (rule === "crime") {
+      els.ruleValueLabel.textContent = mode === "prediction" ? "Target T1 crime (%)" : "Target crime (%)";
+      els.ruleValue.min = "0.1";
+      els.ruleValue.max = "100";
+      els.ruleValue.step = "0.1";
+      els.ruleValue.value = "50";
+      els.ruleValueHelp.textContent = "Select highest-density units until the target crime share is reached.";
+    } else {
+      els.ruleValueLabel.textContent = "Number of units";
+      els.ruleValue.min = "1";
+      els.ruleValue.max = "";
+      els.ruleValue.step = "1";
+      els.ruleValue.value = "10";
+      els.ruleValueHelp.textContent = "Select the highest-density N units.";
+    }
+  }
 
-  runBtn.addEventListener("click", () => {
+  function getRuleConfig() {
+    const type = els.priorityRule.value;
+    const value = Number(els.ruleValue.value);
+    if (!Number.isFinite(value)) throw new Error("Enter a valid priority-rule value.");
+
+    if ((type === "area" || type === "crime") && !(value > 0 && value <= 100)) {
+      throw new Error("Percentage priority rules must be greater than 0 and no more than 100.");
+    }
+    if (type === "units" && !(Number.isInteger(value) && value >= 1)) {
+      throw new Error("Top N units must be a whole number of at least 1.");
+    }
+    if (type === "pai" && value < 0) {
+      throw new Error("PAI threshold cannot be negative.");
+    }
+    return { type, value };
+  }
+
+  function priorityRuleLabel(rule, actual = null) {
+    if (rule.type === "pai") return `unit PAI ≥ ${rule.value}`;
+    if (rule.type === "area") return `top ${rule.value}% of area${actual ? ` (actual ${pct(actual)})` : ""}`;
+    if (rule.type === "crime") return `top units containing ${rule.value}% of ${mode === "prediction" ? "T1 " : ""}crime`;
+    return `top ${rule.value} unit${rule.value === 1 ? "" : "s"}`;
+  }
+
+  function parseSelectedFile() {
     if (!selectedFile) return;
 
-    setStatus("Parsing CSV…", true);
-
+    setStatus("Reading CSV…", "ok");
     Papa.parse(selectedFile, {
       header: true,
-      skipEmptyLines: true,
-      dynamicTyping: true,
+      skipEmptyLines: "greedy",
+      dynamicTyping: false,
+      transformHeader: normHeader,
       complete: (results) => {
         try {
-          if (results.errors && results.errors.length) {
-            // show the first parse error
-            throw new Error(results.errors[0].message);
+          if (results.errors?.length) {
+            const fatal = results.errors.find(e => e.type === "Quotes" || e.type === "Delimiter") || results.errors[0];
+            throw new Error(`CSV parse error: ${fatal.message}`);
           }
-          processData(results.data, results.meta.fields || []);
+          const alpha = Number(els.alpha.value);
+          const rule = getRuleConfig();
+          const clean = validateAndClean(results.data, results.meta.fields || []);
+          lastResults = mode === "priority"
+            ? analysePriority(clean, rule, alpha)
+            : analysePrediction(clean, rule, alpha);
+          renderResults(lastResults);
+          setStatus(`Analysis complete. ${clean.length.toLocaleString()} spatial units processed.`, "ok");
         } catch (err) {
-          setStatus(`Error: ${err.message}`, false);
+          els.results.classList.add("hidden");
+          lastResults = null;
+          setStatus(err.message || String(err), "err");
         }
+      },
+      error: (err) => {
+        setStatus(`Could not read the CSV: ${err.message}`, "err");
       }
     });
-  });
+  }
 
-  function processData(rows, fields) {
-    if (!rows || !rows.length) throw new Error("No data rows found.");
+  function validateAndClean(rows, fields) {
+    if (!Array.isArray(rows) || rows.length === 0) throw new Error("No data rows were found.");
 
     const headers = fields.map(normHeader);
+    const required = mode === "priority"
+      ? ["unit_id", "area", "crime_count"]
+      : ["unit_id", "area", "crime_count_t1", "crime_count_t2"];
 
-    const unitIdx  = findCol(headers, ["unit_id", "unit", "id", "hex_id", "ward_id"]);
-    const areaIdx  = findCol(headers, ["area", "area_m2", "area_ha", "area_sqmi", "area_km2"]);
-    const crimeIdx = findCol(headers, ["crime_count", "crimes", "count", "n_crimes"]);
-
-    if (unitIdx === -1 || areaIdx === -1 || crimeIdx === -1) {
-      throw new Error(
-        `Missing required columns. Found headers: ${headers.join(", ")}. ` +
-        `Need: unit_id, area, crime_count (or accepted variants).`
-      );
+    const missing = required.filter(c => !headers.includes(c));
+    if (missing.length) {
+      throw new Error(`Missing required column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`);
     }
 
-    // Convert rows into clean objects
-    const data = rows.map(r => {
-      const raw = Object.values(r);
-      return {
-        unit: String(raw[unitIdx]),
-        area: Number(raw[areaIdx]),
-        crimes: Number(raw[crimeIdx])
-      };
-    }).filter(d => d.unit && Number.isFinite(d.area) && Number.isFinite(d.crimes));
+    const cleaned = [];
+    const errors = [];
+    const seen = new Set();
 
-    if (!data.length) throw new Error("No valid rows after reading unit/area/crime_count.");
+    rows.forEach((row, index) => {
+      const rowNo = index + 2;
+      const unit = String(row.unit_id ?? "").trim();
+      const area = Number(String(row.area ?? "").replaceAll(",", ""));
+      const c1Raw = mode === "priority" ? row.crime_count : row.crime_count_t1;
+      const c2Raw = mode === "prediction" ? row.crime_count_t2 : null;
+      const c1 = Number(String(c1Raw ?? "").replaceAll(",", ""));
+      const c2 = mode === "prediction" ? Number(String(c2Raw ?? "").replaceAll(",", "")) : null;
 
-    const totalCrimes = data.reduce((s, d) => s + d.crimes, 0);
-    const totalArea   = data.reduce((s, d) => s + d.area, 0);
+      if (!unit) errors.push(`row ${rowNo}: missing unit_id`);
+      if (unit && seen.has(unit)) errors.push(`row ${rowNo}: duplicate unit_id '${unit}'`);
+      if (!Number.isFinite(area) || area <= 0) errors.push(`row ${rowNo}: area must be greater than 0`);
+      if (!Number.isFinite(c1) || c1 < 0) errors.push(`row ${rowNo}: ${mode === "priority" ? "crime_count" : "crime_count_t1"} must be 0 or greater`);
+      if (mode === "prediction" && (!Number.isFinite(c2) || c2 < 0)) errors.push(`row ${rowNo}: crime_count_t2 must be 0 or greater`);
 
-    if (!(totalCrimes > 0)) throw new Error("Total crime_count is 0 (or invalid).");
-    if (!(totalArea > 0)) throw new Error("Total area is 0 (or invalid).");
-    if (data.some(d => d.area <= 0)) throw new Error("Some rows have area <= 0.");
-
-    data.forEach(d => {
-      d.pai = (d.crimes / totalCrimes) / (d.area / totalArea);
+      if (unit) seen.add(unit);
+      cleaned.push({ unit_id: unit, area, c1, c2 });
     });
 
-    // Sort by crimes descending (ties arbitrary)
-    data.sort((a, b) => b.crimes - a.crimes);
+    if (errors.length) {
+      const shown = errors.slice(0, 6).join("; ");
+      const extra = errors.length > 6 ? `; plus ${errors.length - 6} more issue(s)` : "";
+      throw new Error(`Data validation failed: ${shown}${extra}.`);
+    }
 
-    const paiValues = data.map(d => d.pai);
-    const above10 = paiValues.filter(v => v > 10).length;
+    const totalArea = cleaned.reduce((s, d) => s + d.area, 0);
+    const total1 = cleaned.reduce((s, d) => s + d.c1, 0);
+    if (!(totalArea > 0)) throw new Error("Total area must be greater than 0.");
+    if (!(total1 > 0)) throw new Error(`${mode === "priority" ? "Total crime_count" : "Total crime_count_t1"} must be greater than 0.`);
 
-    summaryEl.textContent = `${above10} spatial units have a PAI greater than 10`;
-    setStatus(`OK. Rows: ${data.length}. Total crimes: ${totalCrimes}.`, true);
+    if (mode === "prediction") {
+      const total2 = cleaned.reduce((s, d) => s + d.c2, 0);
+      if (!(total2 > 0)) throw new Error("Total crime_count_t2 must be greater than 0.");
+    }
 
-    drawChart(paiValues);
+    return cleaned;
   }
 
-  function drawChart(paiValues) {
-    const ctx = document.getElementById("paiChart").getContext("2d");
-    if (chart) chart.destroy();
+  function rankRows(data, crimeField) {
+    return [...data].sort((a, b) => {
+      const densityA = a[crimeField] / a.area;
+      const densityB = b[crimeField] / b.area;
+      if (densityB !== densityA) return densityB - densityA;
+      if (b[crimeField] !== a[crimeField]) return b[crimeField] - a[crimeField];
+      return String(a.unit_id).localeCompare(String(b.unit_id));
+    });
+  }
 
-    chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: paiValues.map((_, i) => i + 1),
-        datasets: [
-          {
-            label: "PAI (ranked by crime count)",
-            data: paiValues,
-            borderWidth: 2,
-            pointRadius: 0
-          },
-          {
-            label: "PAI = 10",
-            data: paiValues.map(() => 10),
-            borderWidth: 2,
-            borderDash: [6, 6],
-            pointRadius: 0
-          }
-        ]
+  function markSelection(ranked, rule, totalArea, totalCrime, unitPaiField, crimeField) {
+    let cumArea = 0;
+    let cumCrime = 0;
+
+    ranked.forEach((d, i) => {
+      const beforeArea = cumArea / totalArea;
+      const beforeCrime = cumCrime / totalCrime;
+      let selected = false;
+
+      if (rule.type === "pai") selected = d[unitPaiField] >= rule.value;
+      if (rule.type === "area") selected = beforeArea < (rule.value / 100);
+      if (rule.type === "crime") selected = beforeCrime < (rule.value / 100);
+      if (rule.type === "units") selected = i < Math.min(rule.value, ranked.length);
+
+      d.selected = selected;
+      if (selected) {
+        cumArea += d.area;
+        cumCrime += d[crimeField];
+      }
+    });
+  }
+
+  function selectedTotals(ranked, crimeField, totalArea, totalCrime, alpha) {
+    const selected = ranked.filter(d => d.selected);
+    const area = selected.reduce((s, d) => s + d.area, 0);
+    const crime = selected.reduce((s, d) => s + d[crimeField], 0);
+    const areaShare = area / totalArea;
+    const hitRate = crime / totalCrime;
+    const pai = areaShare > 0 ? hitRate / areaShare : NaN;
+    const ppai = areaShare > 0 ? hitRate / Math.pow(areaShare, alpha) : NaN;
+    return { selected, nUnits: selected.length, area, crime, areaShare, hitRate, pai, ppai };
+  }
+
+  function addCumulativeMetrics(ranked, totalArea, totalCrime, crimeField, alpha, prefix = "") {
+    let cumArea = 0;
+    let cumCrime = 0;
+    ranked.forEach((d, i) => {
+      cumArea += d.area;
+      cumCrime += d[crimeField];
+      const aShare = cumArea / totalArea;
+      const cShare = cumCrime / totalCrime;
+      d[`${prefix}rank`] = i + 1;
+      d[`${prefix}cum_area_share`] = aShare;
+      d[`${prefix}cum_crime_share`] = cShare;
+      d[`${prefix}cum_pai`] = aShare > 0 ? cShare / aShare : NaN;
+      d[`${prefix}cum_ppai`] = aShare > 0 ? cShare / Math.pow(aShare, alpha) : NaN;
+    });
+  }
+
+  function analysePriority(data, rule, alpha) {
+    const totalArea = data.reduce((s, d) => s + d.area, 0);
+    const totalCrime = data.reduce((s, d) => s + d.c1, 0);
+
+    data.forEach(d => {
+      d.crime_density = d.c1 / d.area;
+      d.crime_share = d.c1 / totalCrime;
+      d.area_share = d.area / totalArea;
+      d.unit_pai = d.crime_share / d.area_share;
+    });
+
+    const ranked = rankRows(data, "c1");
+    addCumulativeMetrics(ranked, totalArea, totalCrime, "c1", alpha);
+    markSelection(ranked, rule, totalArea, totalCrime, "unit_pai", "c1");
+    const selected = selectedTotals(ranked, "c1", totalArea, totalCrime, alpha);
+
+    ranked.forEach(d => { d.priority = d.selected ? "Yes" : "No"; });
+
+    return {
+      mode: "priority",
+      alpha,
+      rule,
+      totalArea,
+      totalCrime,
+      ranked,
+      selected
+    };
+  }
+
+  function analysePrediction(data, rule, alpha) {
+    const totalArea = data.reduce((s, d) => s + d.area, 0);
+    const total1 = data.reduce((s, d) => s + d.c1, 0);
+    const total2 = data.reduce((s, d) => s + d.c2, 0);
+
+    data.forEach(d => {
+      d.density_t1 = d.c1 / d.area;
+      d.density_t2 = d.c2 / d.area;
+      d.area_share = d.area / totalArea;
+      d.crime_share_t1 = d.c1 / total1;
+      d.crime_share_t2 = d.c2 / total2;
+      d.unit_pai_t1 = d.crime_share_t1 / d.area_share;
+      d.unit_pai_t2 = d.crime_share_t2 / d.area_share;
+      d.crime_change = d.c2 - d.c1;
+      d.crime_change_pct = d.c1 > 0 ? (d.c2 - d.c1) / d.c1 : (d.c2 > 0 ? Infinity : 0);
+    });
+
+    const rankedT1 = rankRows(data, "c1");
+    addCumulativeMetrics(rankedT1, totalArea, total1, "c1", alpha, "t1_");
+    markSelection(rankedT1, rule, totalArea, total1, "unit_pai_t1", "c1");
+    rankedT1.forEach(d => { d.selected_t1 = d.selected; });
+
+    const rankedT2 = rankRows(data, "c2");
+    addCumulativeMetrics(rankedT2, totalArea, total2, "c2", alpha, "t2_");
+    markSelection(rankedT2, rule, totalArea, total2, "unit_pai_t2", "c2");
+    rankedT2.forEach(d => { d.selected_t2 = d.selected; });
+
+    const t2Lookup = new Map(rankedT2.map(d => [d.unit_id, {
+      rank: d.t2_rank,
+      selected: d.selected_t2,
+      cum_area_share: d.t2_cum_area_share,
+      cum_crime_share: d.t2_cum_crime_share,
+      cum_pai: d.t2_cum_pai,
+      cum_ppai: d.t2_cum_ppai
+    }]));
+
+    rankedT1.forEach(d => {
+      const t2 = t2Lookup.get(d.unit_id);
+      d.rank_t1 = d.t1_rank;
+      d.rank_t2 = t2.rank;
+      d.rank_change = d.rank_t1 - d.rank_t2; // positive = moved up in T2
+      d.selected_t2 = t2.selected;
+      d.priority_status = d.selected_t1 && d.selected_t2 ? "Remained priority"
+        : d.selected_t1 ? "Left priority"
+        : d.selected_t2 ? "Entered priority"
+        : "Not priority";
+      d.priority = d.selected_t1 ? "Yes" : "No";
+    });
+
+    const selectedRows = rankedT1.filter(d => d.selected_t1);
+    const selectedArea = selectedRows.reduce((s, d) => s + d.area, 0);
+    const selectedT1Crime = selectedRows.reduce((s, d) => s + d.c1, 0);
+    const selectedT2Crime = selectedRows.reduce((s, d) => s + d.c2, 0);
+    const areaShare = selectedArea / totalArea;
+    const hitT1 = selectedT1Crime / total1;
+    const hitT2 = selectedT2Crime / total2;
+    const paiT1 = areaShare > 0 ? hitT1 / areaShare : NaN;
+    const paiT2 = areaShare > 0 ? hitT2 / areaShare : NaN;
+    const ppaiT1 = areaShare > 0 ? hitT1 / Math.pow(areaShare, alpha) : NaN;
+    const ppaiT2 = areaShare > 0 ? hitT2 / Math.pow(areaShare, alpha) : NaN;
+    const rri = Number.isFinite(paiT1) && paiT1 !== 0 ? paiT2 / paiT1 : NaN;
+
+    const t1Set = new Set(rankedT1.filter(d => d.selected_t1).map(d => d.unit_id));
+    const t2Set = new Set(rankedT1.filter(d => d.selected_t2).map(d => d.unit_id));
+    const remained = [...t1Set].filter(id => t2Set.has(id)).length;
+    const left = [...t1Set].filter(id => !t2Set.has(id)).length;
+    const entered = [...t2Set].filter(id => !t1Set.has(id)).length;
+    const union = new Set([...t1Set, ...t2Set]).size;
+    const jaccard = union > 0 ? remained / union : NaN;
+
+    // Prediction/surveillance curve: T1 ranking, but cumulative T2 crime.
+    let cumArea = 0;
+    let cumT2 = 0;
+    rankedT1.forEach(d => {
+      cumArea += d.area;
+      cumT2 += d.c2;
+      d.pred_curve_area_share = cumArea / totalArea;
+      d.pred_curve_t2_share = cumT2 / total2;
+    });
+
+    return {
+      mode: "prediction",
+      alpha,
+      rule,
+      totalArea,
+      total1,
+      total2,
+      ranked: rankedT1,
+      selected: {
+        selected: selectedRows,
+        nUnits: selectedRows.length,
+        area: selectedArea,
+        areaShare,
+        crimeT1: selectedT1Crime,
+        crimeT2: selectedT2Crime,
+        hitT1,
+        hitT2,
+        paiT1,
+        paiT2,
+        ppaiT1,
+        ppaiT2,
+        rri
       },
+      stability: { remained, left, entered, jaccard, t1N: t1Set.size, t2N: t2Set.size }
+    };
+  }
+
+  function metricCard(label, value, sub = "") {
+    return `<div class="metric"><div class="label">${escapeHtml(label)}</div><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+  }
+
+  function renderResults(result) {
+    els.results.classList.remove("hidden");
+    els.selectionDescription.textContent = `Priority rule: ${priorityRuleLabel(result.rule, result.selected.areaShare)}. PPAI α = ${result.alpha.toFixed(2)}.`;
+
+    if (result.selected.nUnits === 0) {
+      setStatus("The analysis ran, but the selected rule identified no priority units. Adjust the threshold or selection rule.", "warn");
+    }
+
+    if (result.mode === "priority") renderPrioritySummary(result);
+    else renderPredictionSummary(result);
+
+    renderChart(result);
+    renderTable(result);
+  }
+
+  function renderPrioritySummary(r) {
+    els.interventionPanel.classList.remove("hidden");
+    els.stabilityPanel.classList.add("hidden");
+    const s = r.selected;
+
+    els.summaryGrid.innerHTML = [
+      metricCard("Priority units", s.nUnits.toLocaleString(), `of ${r.ranked.length.toLocaleString()} units`),
+      metricCard("Crime captured", pct(s.hitRate), `${countFmt(s.crime)} of ${countFmt(r.totalCrime)} crimes`),
+      metricCard("Area covered", pct(s.areaShare), `${countFmt(s.area)} of ${countFmt(r.totalArea)} area units`),
+      metricCard("Selected-area PAI", num(s.pai), "Relative density vs study-area average"),
+      metricCard(`PPAI (α=${r.alpha.toFixed(2)})`, num(s.ppai), "Balances capture and spatial coverage")
+    ].join("");
+
+    const impact15 = s.hitRate * 0.15;
+    els.summaryNarrative.innerHTML = s.nUnits
+      ? `<strong>${s.nUnits.toLocaleString()} priority unit${s.nUnits === 1 ? "" : "s"}</strong> contain <strong>${pct(s.hitRate)}</strong> of crime while covering <strong>${pct(s.areaShare)}</strong> of the study area. A 15% reduction in crime in these selected places would equal approximately a <strong>${pct(impact15)}</strong> reduction in crime across the whole study area, assuming all else remains unchanged.`
+      : `No units meet the current priority rule.`;
+
+    const reductions = [0.05, 0.10, 0.15, 0.20];
+    els.scenarioBody.innerHTML = reductions.map(reduction => {
+      const prevented = s.crime * reduction;
+      const overallReduction = prevented / r.totalCrime;
+      const remaining = r.totalCrime - prevented;
+      return `<tr>
+        <td>${pct(reduction, 0)}</td>
+        <td>${countFmt(prevented)}</td>
+        <td>${pct(overallReduction)}</td>
+        <td>${countFmt(remaining)}</td>
+      </tr>`;
+    }).join("");
+
+    els.chartTitle.textContent = "Crime concentration curve";
+    els.chartDescription.textContent = "Units are ranked from highest to lowest crime density. The curve shows cumulative crime captured as cumulative study area increases. The diagonal is the study-area-average baseline.";
+  }
+
+  function renderPredictionSummary(r) {
+    els.interventionPanel.classList.add("hidden");
+    els.stabilityPanel.classList.remove("hidden");
+    const s = r.selected;
+
+    els.summaryGrid.innerHTML = [
+      metricCard("T1-selected units", s.nUnits.toLocaleString(), `of ${r.ranked.length.toLocaleString()} units`),
+      metricCard("T2 hit / capture rate", pct(s.hitT2), `${countFmt(s.crimeT2)} of ${countFmt(r.total2)} T2 crimes`),
+      metricCard("Area covered", pct(s.areaShare), "Area selected using T1 only"),
+      metricCard("T2 PAI", num(s.paiT2), `T1 PAI: ${num(s.paiT1)}`),
+      metricCard(`T2 PPAI (α=${r.alpha.toFixed(2)})`, num(s.ppaiT2), `T1 PPAI: ${num(s.ppaiT1)}`),
+      metricCard("RRI", num(s.rri), "PAI T2 ÷ PAI T1")
+    ].join("");
+
+    const rriText = !Number.isFinite(s.rri) ? "RRI is undefined for this selection"
+      : s.rri > 1.05 ? "relative concentration increased in T2"
+      : s.rri < 0.95 ? "relative concentration decreased in T2"
+      : "relative concentration was broadly stable between T1 and T2";
+
+    els.summaryNarrative.innerHTML = s.nUnits
+      ? `Using <strong>T1 only</strong>, the selected places covered <strong>${pct(s.areaShare)}</strong> of the study area. They contained <strong>${pct(s.hitT2)}</strong> of all T2 crime, giving a T2 PAI of <strong>${num(s.paiT2)}</strong>. The RRI is <strong>${num(s.rri)}</strong>, indicating that ${rriText}.`
+      : `No units meet the current T1 priority rule, so prediction measures cannot be calculated.`;
+
+    const st = r.stability;
+    els.stabilityGrid.innerHTML = [
+      metricCard("Remained priority", st.remained.toLocaleString(), "Priority in both T1 and T2"),
+      metricCard("Left priority", st.left.toLocaleString(), "Priority in T1 only"),
+      metricCard("Entered priority", st.entered.toLocaleString(), "Priority in T2 only"),
+      metricCard("Jaccard overlap", pct(st.jaccard), "Intersection ÷ union of T1/T2 priority sets")
+    ].join("");
+
+    els.chartTitle.textContent = "Prospective crime capture curve";
+    els.chartDescription.textContent = "Units are ranked using T1 crime density only. The main curve shows how much T2 crime is captured as a larger share of the study area is selected. The T1 curve is shown for comparison; the diagonal is the study-area-average baseline.";
+  }
+
+  function curvePoints(ranked, xField, yField) {
+    const points = [{x: 0, y: 0}];
+    ranked.forEach(d => points.push({ x: d[xField] * 100, y: d[yField] * 100 }));
+    return points;
+  }
+
+  function selectedPoint(r) {
+    const s = r.selected;
+    if (!(s.nUnits > 0)) return [];
+    if (r.mode === "priority") return [{ x: s.areaShare * 100, y: s.hitRate * 100 }];
+    return [{ x: s.areaShare * 100, y: s.hitT2 * 100 }];
+  }
+
+  function renderChart(r) {
+    if (chart) chart.destroy();
+    const datasets = [];
+
+    if (r.mode === "priority") {
+      datasets.push({
+        label: "Current-period crime concentration",
+        data: curvePoints(r.ranked, "cum_area_share", "cum_crime_share"),
+        borderWidth: 2.5,
+        pointRadius: 0,
+        tension: 0,
+        parsing: false
+      });
+    } else {
+      datasets.push({
+        label: "T2 crime captured by T1 ranking",
+        data: curvePoints(r.ranked, "pred_curve_area_share", "pred_curve_t2_share"),
+        borderWidth: 2.5,
+        pointRadius: 0,
+        tension: 0,
+        parsing: false
+      });
+      datasets.push({
+        label: "T1 concentration",
+        data: curvePoints(r.ranked, "t1_cum_area_share", "t1_cum_crime_share"),
+        borderWidth: 1.5,
+        borderDash: [7, 5],
+        pointRadius: 0,
+        tension: 0,
+        parsing: false
+      });
+    }
+
+    datasets.push({
+      label: "Study-area average",
+      data: [{x:0,y:0},{x:100,y:100}],
+      borderWidth: 1,
+      borderDash: [4, 4],
+      pointRadius: 0,
+      parsing: false
+    });
+
+    datasets.push({
+      label: "Selected priority area",
+      data: selectedPoint(r),
+      showLine: false,
+      pointRadius: 6,
+      pointHoverRadius: 8,
+      parsing: false
+    });
+
+    chart = new Chart(document.getElementById("mainChart"), {
+      type: "line",
+      data: { datasets },
       options: {
         responsive: true,
-        plugins: { legend: { display: true } },
+        maintainAspectRatio: false,
+        interaction: { mode: "nearest", intersect: false },
+        plugins: {
+          legend: { display: true },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: area ${ctx.parsed.x.toFixed(1)}%, crime ${ctx.parsed.y.toFixed(1)}%`
+            }
+          }
+        },
         scales: {
-          x: { title: { display: true, text: "Spatial units (ranked)" } },
-          y: { title: { display: true, text: "Predictive Accuracy Index (PAI)" }, beginAtZero: true }
+          x: {
+            type: "linear",
+            min: 0,
+            max: 100,
+            title: { display: true, text: "Cumulative study area (%)" }
+          },
+          y: {
+            min: 0,
+            max: 100,
+            title: { display: true, text: "Cumulative crime captured (%)" }
+          }
         }
       }
     });
   }
-</script>
-</body>
-</html>
 
+  function renderTable(r) {
+    if (r.mode === "priority") {
+      const headers = ["unit_id", "crime_count", "area", "crime_density", "unit_pai", "rank", "cum_crime_%", "cum_area_%", "cum_pai", "cum_ppai", "priority"];
+      els.resultsHead.innerHTML = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
+      els.resultsBody.innerHTML = r.ranked.slice(0, 50).map(d => `<tr class="${d.selected ? "priority-row" : ""}">
+        <td>${escapeHtml(d.unit_id)}</td>
+        <td>${countFmt(d.c1)}</td>
+        <td>${countFmt(d.area)}</td>
+        <td>${num(d.crime_density, 4)}</td>
+        <td>${num(d.unit_pai)}</td>
+        <td>${d.rank}</td>
+        <td>${pct(d.cum_crime_share)}</td>
+        <td>${pct(d.cum_area_share)}</td>
+        <td>${num(d.cum_pai)}</td>
+        <td>${num(d.cum_ppai)}</td>
+        <td>${d.priority}</td>
+      </tr>`).join("");
+    } else {
+      const headers = ["unit_id", "t1", "t2", "area", "unit_pai_t1", "unit_pai_t2", "rank_t1", "rank_t2", "rank_change", "crime_change", "crime_change_%", "priority_t1", "priority_t2", "status"];
+      els.resultsHead.innerHTML = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
+      els.resultsBody.innerHTML = r.ranked.slice(0, 50).map(d => `<tr class="${d.selected_t1 ? "priority-row" : ""}">
+        <td>${escapeHtml(d.unit_id)}</td>
+        <td>${countFmt(d.c1)}</td>
+        <td>${countFmt(d.c2)}</td>
+        <td>${countFmt(d.area)}</td>
+        <td>${num(d.unit_pai_t1)}</td>
+        <td>${num(d.unit_pai_t2)}</td>
+        <td>${d.rank_t1}</td>
+        <td>${d.rank_t2}</td>
+        <td>${d.rank_change > 0 ? "+" : ""}${d.rank_change}</td>
+        <td>${d.crime_change > 0 ? "+" : ""}${countFmt(d.crime_change)}</td>
+        <td>${Number.isFinite(d.crime_change_pct) ? `${d.crime_change_pct > 0 ? "+" : ""}${pct(d.crime_change_pct)}` : "New from zero"}</td>
+        <td>${d.selected_t1 ? "Yes" : "No"}</td>
+        <td>${d.selected_t2 ? "Yes" : "No"}</td>
+        <td>${escapeHtml(d.priority_status)}</td>
+      </tr>`).join("");
+    }
+  }
+
+  function downloadCsv(filename, rows) {
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportRows(r) {
+    if (r.mode === "priority") {
+      return r.ranked.map(d => ({
+        unit_id: d.unit_id,
+        area: d.area,
+        crime_count: d.c1,
+        crime_density: d.crime_density,
+        crime_share: d.crime_share,
+        area_share: d.area_share,
+        unit_pai: d.unit_pai,
+        rank: d.rank,
+        cumulative_crime_share: d.cum_crime_share,
+        cumulative_area_share: d.cum_area_share,
+        cumulative_pai: d.cum_pai,
+        cumulative_ppai: d.cum_ppai,
+        ppai_alpha: r.alpha,
+        priority: d.priority
+      }));
+    }
+
+    return r.ranked.map(d => ({
+      unit_id: d.unit_id,
+      area: d.area,
+      crime_count_t1: d.c1,
+      crime_count_t2: d.c2,
+      density_t1: d.density_t1,
+      density_t2: d.density_t2,
+      area_share: d.area_share,
+      crime_share_t1: d.crime_share_t1,
+      crime_share_t2: d.crime_share_t2,
+      unit_pai_t1: d.unit_pai_t1,
+      unit_pai_t2: d.unit_pai_t2,
+      rank_t1: d.rank_t1,
+      rank_t2: d.rank_t2,
+      rank_change_positive_is_higher_in_t2: d.rank_change,
+      crime_change: d.crime_change,
+      crime_change_pct: Number.isFinite(d.crime_change_pct) ? d.crime_change_pct : "",
+      priority_t1: d.selected_t1 ? "Yes" : "No",
+      priority_t2: d.selected_t2 ? "Yes" : "No",
+      priority_status: d.priority_status,
+      t1_cumulative_area_share: d.t1_cum_area_share,
+      t1_cumulative_crime_share: d.t1_cum_crime_share,
+      t1_cumulative_pai: d.t1_cum_pai,
+      t1_cumulative_ppai: d.t1_cum_ppai,
+      t2_rank_cumulative_area_share: d.t2_cum_area_share,
+      t2_rank_cumulative_crime_share: d.t2_cum_crime_share,
+      t2_rank_cumulative_pai: d.t2_cum_pai,
+      t2_rank_cumulative_ppai: d.t2_cum_ppai,
+      prospective_curve_area_share: d.pred_curve_area_share,
+      prospective_curve_t2_crime_share: d.pred_curve_t2_share,
+      ppai_alpha: r.alpha
+    }));
+  }
+
+  function downloadSample() {
+    if (mode === "priority") {
+      downloadCsv("pai_priority_example.csv", [
+        {unit_id:"A001", area:1.0, crime_count:18},
+        {unit_id:"A002", area:1.0, crime_count:9},
+        {unit_id:"A003", area:1.0, crime_count:4},
+        {unit_id:"A004", area:1.0, crime_count:2},
+        {unit_id:"A005", area:1.0, crime_count:1}
+      ]);
+    } else {
+      downloadCsv("pai_prediction_example.csv", [
+        {unit_id:"A001", area:1.0, crime_count_t1:18, crime_count_t2:15},
+        {unit_id:"A002", area:1.0, crime_count_t1:9, crime_count_t2:11},
+        {unit_id:"A003", area:1.0, crime_count_t1:4, crime_count_t2:2},
+        {unit_id:"A004", area:1.0, crime_count_t1:2, crime_count_t2:5},
+        {unit_id:"A005", area:1.0, crime_count_t1:1, crime_count_t2:1}
+      ]);
+    }
+  }
+
+  els.modePriority.addEventListener("click", () => setMode("priority"));
+  els.modePrediction.addEventListener("click", () => setMode("prediction"));
+  els.priorityRule.addEventListener("change", updateRuleUI);
+  els.alpha.addEventListener("input", () => { els.alphaValue.textContent = Number(els.alpha.value).toFixed(2); });
+  els.sampleBtn.addEventListener("click", downloadSample);
+  els.csvFile.addEventListener("change", (event) => {
+    selectedFile = event.target.files?.[0] || null;
+    els.runBtn.disabled = !selectedFile;
+    els.results.classList.add("hidden");
+    lastResults = null;
+    if (chart) { chart.destroy(); chart = null; }
+    if (selectedFile) setStatus(`Selected ${selectedFile.name}. Click Run analysis.`, "ok");
+    else clearStatus();
+  });
+  els.runBtn.addEventListener("click", parseSelectedFile);
+  els.downloadBtn.addEventListener("click", () => {
+    if (!lastResults) return;
+    const filename = lastResults.mode === "priority" ? "place_priority_results.csv" : "prediction_evaluation_results.csv";
+    downloadCsv(filename, exportRows(lastResults));
+  });
+
+  updateRuleUI();
+})();
+</script>
 </body>
 </html>
